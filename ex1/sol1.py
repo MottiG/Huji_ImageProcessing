@@ -64,12 +64,13 @@ def imdisplay(filename: str, representation: int) -> None:
 
 
 def imYIQ(imRGB):
-    # R, G, B = imRGB[:, :, 0], imRGB[:, :, 1], imRGB[:, :, 2]
-    rows = imRGB.shape[0]
-    cols = imRGB.shape[1]
-    tempYIQ = RGB2YIQ.dot(imRGB.reshape(3, rows*cols))
-    return tempYIQ.reshape(3, rows, cols) #TODO check dims!!
+    return imRGB.dot(RGB2YIQ.T).astype(np.float32)
+
+
+def imrgb(imYIQ):
+    return imYIQ.dot(YIQ2RGB.T).astype(np.float32)
 
 
 
-imYIQ(read_image("/cs/usr/mottig/safe/imageprocessing/ex1/tests/external/jerusalem.jpg", 2)).shape  # TODO dell
+plt.imshow(imYIQ(read_image("/cs/usr/mottig/safe/imageprocessing/ex1/tests/external/jerusalem.jpg", 2)))  # TODO dell
+plt.show()
