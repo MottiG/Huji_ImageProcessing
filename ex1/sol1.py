@@ -6,6 +6,12 @@ from skimage.color import rgb2gray
 GREYSCALE = 1
 COLOR = 2
 RGBDIM = 3
+RGB2YIQ = np.array([[0.299, 0.587, 0.114],
+                      [0.569, -0.275, -0.321],
+                      [0.212, -0.523, 0.311]])
+YIQ2RGB = np.array([[1, 0.956, 0.621],
+                      [1, -0.272, -0.647],
+                      [1, -1.106, 1.703]])
 
 
 def is_valid_args(filename: str, representation: int) -> bool:
@@ -46,10 +52,24 @@ def imdisplay(filename: str, representation: int) -> None:
     greyscale image (1) or an RGB image (2)
     """
     try:
-        plt.imshow(read_image(filename, representation), cmap=plt.cm.gray)
+        if representation == GREYSCALE:
+            plt.imshow(read_image(filename, representation), cmap=plt.cm.gray)
+        else:
+            plt.imshow(read_image(filename, representation))
     except:
         raise
     else:
         plt.show()
 
 
+
+def imYIQ(imRGB):
+    # R, G, B = imRGB[:, :, 0], imRGB[:, :, 1], imRGB[:, :, 2]
+    rows = imRGB.shape[0]
+    cols = imRGB.shape[1]
+    tempYIQ = RGB2YIQ.dot(imRGB.reshape(3, rows*cols))
+    return tempYIQ.reshape(3, rows, cols) #TODO check dims!!
+
+
+
+imYIQ(read_image("/cs/usr/mottig/safe/imageprocessing/ex1/tests/external/jerusalem.jpg", 2)).shape  # TODO dell
