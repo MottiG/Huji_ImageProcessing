@@ -63,14 +63,14 @@ def imdisplay(filename: str, representation: int) -> None:
 
 
 
-def imYIQ(imRGB):
+def rgb2yiq(imRGB):
     return imRGB.dot(RGB2YIQ.T).astype(np.float32)
 
 
-def imrgb(imYIQ):
+def yiq2rgb(imYIQ):
     return imYIQ.dot(YIQ2RGB.T).astype(np.float32)
 
 
 
-plt.imshow(imYIQ(read_image("/cs/usr/mottig/safe/imageprocessing/ex1/tests/external/jerusalem.jpg", 2)))  # TODO dell
-plt.show()
+plt.imshow(rgb2yiq(read_image("/cs/usr/mottig/safe/imageprocessing/ex1/tests/external/jerusalem.jpg", 2)))  # TODO dell
+plt.show() # TODO dell
