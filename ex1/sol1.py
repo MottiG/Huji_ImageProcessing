@@ -15,10 +15,19 @@ YIQ2RGB = np.array([[1, 0.956, 0.621],
 
 
 def is_valid_args(filename: str, representation: int) -> bool:
+    """
+    Basic checks on the functions input
+    """
     return (filename is not None) and \
            (representation == 1 or representation == 2) and \
            isinstance(filename, str)
 
+
+def is_rgb(im: np.ndarray) -> bool:
+    """
+    Check if a given image is rgb or greyscale
+    """
+    return im.ndim == RGBDIM
 
 def read_image(filename: str, representation: int) -> np.ndarray:
     """
@@ -36,9 +45,9 @@ def read_image(filename: str, representation: int) -> np.ndarray:
     except OSError:
         raise Exception("Filename should be valid image filename")
 
-    if (im.ndim == RGBDIM) and (representation == GREYSCALE):  # change rgb to greyscale
+    if is_rgb(im) and (representation == GREYSCALE):  # change rgb to greyscale
         im = rgb2gray(im).astype(np.float32)
-    elif (im.ndim != RGBDIM) and (representation == COLOR):
+    elif not is_rgb(im) and (representation == COLOR):
         raise Exception("Converting greyscale to RGB is not supported")
 
     return im
@@ -51,6 +60,7 @@ def imdisplay(filename: str, representation: int) -> None:
     :param representation: representation code, either 1 or 2 defining if the output should be either a
     greyscale image (1) or an RGB image (2)
     """
+    plt.figure()
     try:
         if representation == GREYSCALE:
             plt.imshow(read_image(filename, representation), cmap=plt.cm.gray)
@@ -62,15 +72,49 @@ def imdisplay(filename: str, representation: int) -> None:
         plt.show()
 
 
+def rgb2yiq(imRGB: np.ndarray) -> np.ndarray:
+    """
+    transform an RGB image into the YIQ color space
+    :param imRGB: height×width×3 np.float32 matrix with values in [0, 1]
+    :return: YIQ color space
+    """
+    if is_rgb(imRGB):
+        return imRGB.dot(RGB2YIQ.T).astype(np.float32)
+    else:
+        raise Exception("imRGB must be a RGB image")
 
-def rgb2yiq(imRGB):
-    return imRGB.dot(RGB2YIQ.T).astype(np.float32)
+
+def yiq2rgb(imYIQ: np.ndarray) -> np.ndarray:
+    """
+    transform an YIQ color space to RGB image
+    :param imYIQ: height×width×3 np.float32 matrix with values in [0, 1]
+    :return: RGB image
+    """
+    if is_rgb(imYIQ):
+        return imYIQ.dot(YIQ2RGB.T).astype(np.float32)
+    else:
+        raise Exception("imYIQ must be an YIQ matrices")
 
 
-def yiq2rgb(imYIQ):
-    return imYIQ.dot(YIQ2RGB.T).astype(np.float32)
+def histogram_equalize(im_orig: np.ndarray) -> tuple:
+    """
+    perform histogram equalization of a given greyscale or RGB image
+    :param im_orig: greyscale or RGB float32 image with values in [0, 1]
+    :return: [im_eq, hist_orig, hist_eq] -
+    im_eq - is the equalized image. greyscale or RGB float32 image with values in [0, 1].
+    hist_orig - is a 256 bin histogram of the original image.
+    hist_eq - is a 256 bin histogram of the equalized image.
+    """
+    yiq_mat = None
+    if is_rgb(im_orig):
+        yiq_mat = rgb2yiq(im_orig) # convert to YIQ and take only Y matrix
+        im_orig = yiq_mat[:, :, 0]
+    hist_orig, bin_edges = np.histogram(im_orig * 255, 256)
+    cdf = np.cumsum(hist_orig)
+    hist_eq = np.around(255*(cdf - cdf.min()) / (cdf.max() - cdf.min()))
+    im_eq = hist_eq[(im_orig * 255).astype(np.uint8)].astype(np.float32) / 255
+    if yiq_mat is not None:  # im_eq needs to convert to RGB
+        yiq_mat[:, :, 0] = im_eq
+        im_eq = yiq2rgb(yiq_mat)
+    return im_eq, hist_orig, hist_eq
 
-
-
-plt.imshow(rgb2yiq(read_image("/cs/usr/mottig/safe/imageprocessing/ex1/tests/external/jerusalem.jpg", 2)))  # TODO dell
-plt.show() # TODO dell
