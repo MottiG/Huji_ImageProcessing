@@ -111,10 +111,19 @@ def histogram_equalize(im_orig: np.ndarray) -> tuple:
         im_orig = yiq_mat[:, :, 0]
     hist_orig, bin_edges = np.histogram(im_orig * 255, 256)
     cdf = np.cumsum(hist_orig)
-    hist_eq = np.around(255*(cdf - cdf.min()) / (cdf.max() - cdf.min()))
+    hist_eq = np.round(255 * (cdf - cdf.min()) / (cdf.max() - cdf.min()))
+    # im_eq = np.interp(im_orig.flatten(), bin_edges[:-1], hist_eq).reshape(im_orig.shape)
     im_eq = hist_eq[(im_orig * 255).astype(np.uint8)].astype(np.float32) / 255
     if yiq_mat is not None:  # im_eq needs to convert to RGB
         yiq_mat[:, :, 0] = im_eq
         im_eq = yiq2rgb(yiq_mat)
+
     return im_eq, hist_orig, hist_eq
 
+res = histogram_equalize(read_image("/cs/usr/mottig/safe/imageprocessing/ex1/tests/external/Low Contrast.jpg", 2))
+f = plt.figure()
+f.add_subplot(1, 2, 1)
+plt.imshow(read_image("/cs/usr/mottig/safe/imageprocessing/ex1/tests/external/Low Contrast.jpg", 2))
+f.add_subplot(1, 2, 2)
+plt.imshow(res[0])
+plt.show()
