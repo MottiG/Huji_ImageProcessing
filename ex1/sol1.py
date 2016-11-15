@@ -130,7 +130,7 @@ def histogram_equalize(im_orig: np.ndarray) -> tuple:
     hist_orig - is a 256 bin histogram of the original image.
     hist_eq - is a 256 bin histogram of the equalized image.
     """
-
+    # TODO try catch
     hist_orig, bin_edges, cdf, yiq_mat = get_hist_cdf_and_yiq(im_orig)
     norm_cdf = np.round(MAX_PIX_VAL * (cdf - min(cdf)) / (max(cdf) - min(cdf)))
     im_eq = np.interp(im_orig, bin_edges[:-1], norm_cdf).astype(np.float32) / MAX_PIX_VAL
@@ -146,6 +146,7 @@ def histogram_equalize(im_orig: np.ndarray) -> tuple:
 
 def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> np.ndarray:
 
+    # TODO args check
     hist_orig, bin_edges, cdf, yiq_mat = get_hist_cdf_and_yiq(im_orig)
     errors_arr = []
 
@@ -163,7 +164,7 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> np.ndarray:
         for i in range(n_quant):  # TODO check the borders, right now each z_i is calculates twice (except 0 and 255)
             z_min = z_arr[i]
             z_max = z_arr[i+1]
-            print(z_min,z_max) #TODO solve bug: after first iter the new z is [  0  16  16  15 255] - because of borders maybe?
+            print(z_min,z_max)
             q_arr[i] = np.average(hist_orig[z_min:z_max+1], weights=range(z_min, z_max+1))
 
             # calc error:
@@ -174,7 +175,7 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> np.ndarray:
         # calc new z values, the borders (0 and 255) remains the same:
         new_z_arr = np.zeros(n_quant + 1, int)
         for i in range(1, n_quant):  # start from 1, first val is 0
-            new_z_arr[i] = (np.searchsorted(cdf, q_arr[i-1]) + np.searchsorted(cdf, q_arr[i])) / 2
+            new_z_arr[i] = np.searchsorted(cdf, (q_arr[i-1] + q_arr[i]) / 2) # TODO solve bug: new Z is not sorted
         new_z_arr[n_quant] = MAX_PIX_VAL  # last val is 255
 
         if False in (new_z_arr == z_arr):
