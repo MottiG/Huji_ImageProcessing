@@ -33,6 +33,7 @@ def read_image(filename: str, representation: int) -> np.ndarray:
     greyscale image (1) or an RGB image (2)
     :return: Image represented by a matrix of class np.float32, normalized to the range [0, 1].
     """
+
     if not is_valid_args(filename, representation):
         raise Exception("Please provide valid filename and representation code")
 
@@ -57,6 +58,7 @@ def imdisplay(filename: str, representation: int) -> None:
     :param representation: representation code, either 1 or 2 defining if the output should be either a
     greyscale image (1) or an RGB image (2)
     """
+
     plt.figure()
     try:
         if representation == GREYSCALE:
@@ -75,6 +77,7 @@ def rgb2yiq(imRGB: np.ndarray) -> np.ndarray:
     :param imRGB: height×width×3 np.float32 matrix with values in [0, 1]
     :return: YIQ color space
     """
+
     trans_mat = np.array([[0.299, 0.587, 0.114], [0.569, -0.275, -0.321], [0.212, -0.523, 0.311]]).astype(np.float32)
     if is_rgb(imRGB):
         return imRGB.dot(trans_mat.T)
@@ -88,11 +91,34 @@ def yiq2rgb(imYIQ: np.ndarray) -> np.ndarray:
     :param imYIQ: height×width×3 np.float32 matrix with values in [0, 1]
     :return: RGB image
     """
+
     trans_mat = np.array([[1, 0.956, 0.621], [1, -0.272, -0.647], [1, -1.106, 1.703]]).astype(np.float32)
     if is_rgb(imYIQ):
         return imYIQ.dot(trans_mat.T)
     else:
         raise Exception("imYIQ must be an YIQ matrices")
+
+
+def get_hist_cdf_and_yiq(im_orig: np.ndarray) -> tuple:
+    """
+    help function to get the cdf of an image
+    :param im_orig: greyscale or RGB float32 image with values in [0, 1]
+    :return: tuple contains: (orig_hist, bin_edges, cdf, yiq_mat)
+    orig_hist - the original images' histogram, in case of a RGB image - the histogram of the Y matrix.
+    bin_edges - the edges of the original images' histogram, in case of a RGB image - the histogram of the Y matrix.
+    cdf - the cumulative histogram
+    yiq_mat - the YIQ matrix in case of a RGB image, None otherwise
+    """
+    yiq_mat = None
+    if is_rgb(im_orig):
+        yiq_mat = rgb2yiq(im_orig)  # convert to YIQ and take only Y matrix
+        im_orig = yiq_mat[:, :, 0]
+
+    im_orig = (im_orig * MAX_PIX_VAL).round().astype(np.uint8)
+    hist_orig, bin_edges = np.histogram(im_orig, MAX_PIX_VAL + 1, [MIN_PIX_VAL, MAX_PIX_VAL])
+    cdf = np.cumsum(hist_orig)
+
+    return hist_orig, bin_edges, cdf, yiq_mat
 
 
 def histogram_equalize(im_orig: np.ndarray) -> tuple:
@@ -105,35 +131,10 @@ def histogram_equalize(im_orig: np.ndarray) -> tuple:
     hist_eq - is a 256 bin histogram of the equalized image.
     """
 
-    yiq_mat = None
-    if is_rgb(im_orig):
-        yiq_mat = rgb2yiq(im_orig)  # convert to YIQ and take only Y matrix
-        im_orig = yiq_mat[:, :, 0]
-
-    im_orig = (im_orig * MAX_PIX_VAL).round().astype(np.uint8)
-
-    hist_orig, bin_edges = np.histogram(im_orig, MAX_PIX_VAL + 1, [MIN_PIX_VAL, MAX_PIX_VAL])
-
-    f = plt.figure()# TODO dell
-    f.add_subplot(2, 2, 1)# TODO dell
-    plt.plot(hist_orig)# TODO dell
-
-    cdf = np.cumsum(hist_orig)
-    f.add_subplot(2, 2, 2)# TODO dell
-    plt.plot(cdf)# TODO dell
-
+    hist_orig, bin_edges, cdf, yiq_mat = get_hist_cdf_and_yiq(im_orig)
     norm_cdf = np.round(MAX_PIX_VAL * (cdf - min(cdf)) / (max(cdf) - min(cdf)))
-
-    f.add_subplot(2, 2, 3)# TODO dell
-    plt.plot(norm_cdf)# TODO dell
-
     im_eq = np.interp(im_orig, bin_edges[:-1], norm_cdf).astype(np.float32) / MAX_PIX_VAL
-
     hist_eq, bin_edges_eq = np.histogram(im_eq * MAX_PIX_VAL, MAX_PIX_VAL + 1, [MIN_PIX_VAL, MAX_PIX_VAL])
-
-    f.add_subplot(2, 2, 4)# TODO dell
-    plt.plot(hist_eq)# TODO dell
-    plt.show()# TODO dell
 
     if yiq_mat is not None:  # im_eq needs to convert to RGB
         yiq_mat[:, :, 0] = im_eq
@@ -143,11 +144,65 @@ def histogram_equalize(im_orig: np.ndarray) -> tuple:
 
 
 
-res = histogram_equalize(read_image("tests/external/monkey.jpg", 2))
+def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> np.ndarray:
+
+    hist_orig, bin_edges, cdf, yiq_mat = get_hist_cdf_and_yiq(im_orig)
+    errors_arr = []
+
+    # calc initial z
+    z_arr = np.zeros(n_quant + 1, int)
+    for i in range(1, n_quant):  # start from 1, first val is 0
+        val = (i/n_quant)*max(cdf)
+        z_arr[i] = np.searchsorted(cdf, val)
+    z_arr[n_quant] = MAX_PIX_VAL  # last val is 255
+    q_arr = np.zeros(n_quant, int)
+    for it in range(n_iter):
+
+        curr_err = 0
+        # calc q and the error of the current iteration
+        for i in range(n_quant):  # TODO check the borders, right now each z_i is calculates twice (except 0 and 255)
+            z_min = z_arr[i]
+            z_max = z_arr[i+1]
+            q_arr[i] = np.average(hist_orig[z_min:z_max+1], weights=range(z_min, z_max+1))
+
+            # calc error:
+            curr_err += sum(hist_orig[z_min:z_max+1] * np.square(np.arange(z_min, z_max+1) - q_arr[i]))
+
+        errors_arr.append(curr_err)
+
+        # calc new z values, the borders (0 and 255) remains the same:
+        new_z_arr = np.zeros(n_quant + 1, int)
+        for i in range(1, n_quant):  # start from 1, first val is 0 #TODO solve bug: the new_z_arr gets [   0 1731 1915 1506  255] - needs to fix to the index of q!!
+            new_z_arr[i] = (q_arr[i-1] + q_arr[i]) / 2
+        new_z_arr[n_quant] = MAX_PIX_VAL  # last val is 255
+
+        if False in (new_z_arr == z_arr):
+            z_arr = new_z_arr.copy()
+        else:  # got convergence!
+            break
+
+
+    # quantise the histogram
+    for i in range(n_quant):
+        hist_orig[z_arr[i]:z_arr[i+1]+1] = q_arr[i]
+
+    im_quant = np.interp(im_orig, bin_edges[:-1], hist_orig).astype(np.float32) / MAX_PIX_VAL
+    if yiq_mat is not None:  # im_eq needs to convert to RGB
+        yiq_mat[:, :, 0] = im_quant
+        im_quant = yiq2rgb(yiq_mat).clip(0, 1)
+
+    return im_quant, errors_arr
+
+
+res = quantize(read_image("tests/external/jerusalem.jpg", 1),4,5)
 f = plt.figure()
 f.add_subplot(1, 2, 1)
-plt.imshow(read_image("tests/external/monkey.jpg", 2), cmap=plt.cm.gray)
+plt.imshow(read_image("tests/external/jerusalem.jpg", 1), cmap=plt.cm.gray)
 f.add_subplot(1, 2, 2)
 plt.imshow(res[0], cmap=plt.cm.gray)
 plt.show()
+
+
+
+
 
