@@ -6,13 +6,8 @@ from skimage.color import rgb2gray
 GREYSCALE = 1
 COLOR = 2
 RGBDIM = 3
-RGB2YIQ = np.array([[0.299, 0.587, 0.114],
-                      [0.569, -0.275, -0.321],
-                      [0.212, -0.523, 0.311]])
-YIQ2RGB = np.array([[1, 0.956, 0.621],
-                      [1, -0.272, -0.647],
-                      [1, -1.106, 1.703]])
-
+MIN_PIX_VAL = 0
+MAX_PIX_VAL = 255
 
 def is_valid_args(filename: str, representation: int) -> bool:
     """
@@ -29,6 +24,7 @@ def is_rgb(im: np.ndarray) -> bool:
     """
     return im.ndim == RGBDIM
 
+
 def read_image(filename: str, representation: int) -> np.ndarray:
     """
     Reads a given image file and converts it into a given representation
@@ -41,16 +37,17 @@ def read_image(filename: str, representation: int) -> np.ndarray:
         raise Exception("Please provide valid filename and representation code")
 
     try:
-        im = imread(filename).astype(np.float32) / 255
+        im = imread(filename)
     except OSError:
         raise Exception("Filename should be valid image filename")
 
     if is_rgb(im) and (representation == GREYSCALE):  # change rgb to greyscale
-        im = rgb2gray(im).astype(np.float32)
+        return rgb2gray(im).astype(np.float32)
+
     elif not is_rgb(im) and (representation == COLOR):
         raise Exception("Converting greyscale to RGB is not supported")
 
-    return im
+    return im.astype(np.float32) / MAX_PIX_VAL
 
 
 def imdisplay(filename: str, representation: int) -> None:
@@ -78,8 +75,9 @@ def rgb2yiq(imRGB: np.ndarray) -> np.ndarray:
     :param imRGB: height×width×3 np.float32 matrix with values in [0, 1]
     :return: YIQ color space
     """
+    trans_mat = np.array([[0.299, 0.587, 0.114], [0.569, -0.275, -0.321], [0.212, -0.523, 0.311]]).astype(np.float32)
     if is_rgb(imRGB):
-        return imRGB.dot(RGB2YIQ.T).astype(np.float32)
+        return imRGB.dot(trans_mat.T)
     else:
         raise Exception("imRGB must be a RGB image")
 
@@ -90,8 +88,9 @@ def yiq2rgb(imYIQ: np.ndarray) -> np.ndarray:
     :param imYIQ: height×width×3 np.float32 matrix with values in [0, 1]
     :return: RGB image
     """
+    trans_mat = np.array([[1, 0.956, 0.621], [1, -0.272, -0.647], [1, -1.106, 1.703]]).astype(np.float32)
     if is_rgb(imYIQ):
-        return imYIQ.dot(YIQ2RGB.T).astype(np.float32)
+        return imYIQ.dot(trans_mat.T)
     else:
         raise Exception("imYIQ must be an YIQ matrices")
 
@@ -105,25 +104,50 @@ def histogram_equalize(im_orig: np.ndarray) -> tuple:
     hist_orig - is a 256 bin histogram of the original image.
     hist_eq - is a 256 bin histogram of the equalized image.
     """
+
     yiq_mat = None
     if is_rgb(im_orig):
-        yiq_mat = rgb2yiq(im_orig) # convert to YIQ and take only Y matrix
+        yiq_mat = rgb2yiq(im_orig)  # convert to YIQ and take only Y matrix
         im_orig = yiq_mat[:, :, 0]
-    hist_orig, bin_edges = np.histogram(im_orig * 255, 256)
+
+    im_orig = (im_orig * MAX_PIX_VAL).round().astype(np.uint8)
+
+    hist_orig, bin_edges = np.histogram(im_orig, MAX_PIX_VAL + 1, [MIN_PIX_VAL, MAX_PIX_VAL])
+
+    f = plt.figure()# TODO dell
+    f.add_subplot(2, 2, 1)# TODO dell
+    plt.plot(hist_orig)# TODO dell
+
     cdf = np.cumsum(hist_orig)
-    hist_eq = np.round(255 * (cdf - cdf.min()) / (cdf.max() - cdf.min()))
-    # im_eq = np.interp(im_orig.flatten(), bin_edges[:-1], hist_eq).reshape(im_orig.shape)
-    im_eq = hist_eq[(im_orig * 255).astype(np.uint8)].astype(np.float32) / 255
+    f.add_subplot(2, 2, 2)# TODO dell
+    plt.plot(cdf)# TODO dell
+
+    norm_cdf = np.round(MAX_PIX_VAL * (cdf - min(cdf)) / (max(cdf) - min(cdf)))
+
+    f.add_subplot(2, 2, 3)# TODO dell
+    plt.plot(norm_cdf)# TODO dell
+
+    im_eq = np.interp(im_orig, bin_edges[:-1], norm_cdf).astype(np.float32) / MAX_PIX_VAL
+
+    hist_eq, bin_edges_eq = np.histogram(im_eq * MAX_PIX_VAL, MAX_PIX_VAL + 1, [MIN_PIX_VAL, MAX_PIX_VAL])
+
+    f.add_subplot(2, 2, 4)# TODO dell
+    plt.plot(hist_eq)# TODO dell
+    plt.show()# TODO dell
+
     if yiq_mat is not None:  # im_eq needs to convert to RGB
         yiq_mat[:, :, 0] = im_eq
-        im_eq = yiq2rgb(yiq_mat)
+        im_eq = yiq2rgb(yiq_mat).clip(0, 1)
 
     return im_eq, hist_orig, hist_eq
 
-res = histogram_equalize(read_image("/cs/usr/mottig/safe/imageprocessing/ex1/tests/external/Low Contrast.jpg", 2))
+
+
+res = histogram_equalize(read_image("tests/external/monkey.jpg", 2))
 f = plt.figure()
 f.add_subplot(1, 2, 1)
-plt.imshow(read_image("/cs/usr/mottig/safe/imageprocessing/ex1/tests/external/Low Contrast.jpg", 2))
+plt.imshow(read_image("tests/external/monkey.jpg", 2), cmap=plt.cm.gray)
 f.add_subplot(1, 2, 2)
-plt.imshow(res[0])
+plt.imshow(res[0], cmap=plt.cm.gray)
 plt.show()
+
