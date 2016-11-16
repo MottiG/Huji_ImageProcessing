@@ -162,6 +162,10 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
     im_orig, hist_orig, bin_edges, cdf, yiq_mat = get_hist_cdf_and_yiq(im_orig)
 
     # calc initial z
+
+    # z_arr = np.array([np.searchsorted(cdf, (i/n_quant)*max(cdf)) for i in range(1, n_quant)])
+    # z_arr = np.insert(z_arr, 0, 0)
+    # np.append(z_arr)
     z_arr = np.zeros(n_quant + 1, int)
     for i in range(1, n_quant):  # start from 1, first val is 0
         z_arr[i] = np.searchsorted(cdf, (i/n_quant)*max(cdf))
@@ -185,14 +189,11 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
             z_min = z_max+1
 
         # calc new z values, the borders (0 and 255) remains the same, so calc only z_i:
-        new_z_arr = np.empty(n_quant - 1, int)
-        for i in range(n_quant-1):  # start from 1, first val is 0
-            new_z_arr[i] = ((q_arr[i] + q_arr[i+1]) / 2).round().astype(np.uint32)
+        new_z_arr = np.array([((q_arr[i] + q_arr[i+1]) / 2).round().astype(np.uint32) for i in range(n_quant-1)])
 
         errors_arr.append(curr_err)
         if not np.array_equal(new_z_arr, z_arr[1:-1]):
             z_arr[1:-1] = new_z_arr
-            print(z_arr)
         else:  # got convergence!
             break
 
@@ -209,8 +210,8 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
     return im_quant, np.array(errors_arr)
 
 # TODO dell
-res1 = quantize(read_image("tests/external/monkey.jpg", 1), 3, 50)
-res2 = quantize(read_image("tests/external/monkey.jpg", 2), 3, 50)
+res1 = quantize(read_image("tests/external/monkey.jpg", 1), 100, 50)
+res2 = quantize(read_image("tests/external/monkey.jpg", 2), 100, 50)
 print(res1[1].shape, res2[1].shape)
 f = plt.figure()
 f.add_subplot(2, 3, 1)
