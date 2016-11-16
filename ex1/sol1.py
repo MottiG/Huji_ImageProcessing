@@ -133,9 +133,10 @@ def histogram_equalize(im_orig: np.ndarray) -> tuple:
     # TODO try catch
     hist_orig, bin_edges, cdf, yiq_mat = get_hist_cdf_and_yiq(im_orig)
     norm_cdf = np.round(MAX_PIX_VAL * (cdf - min(cdf)) / (max(cdf) - min(cdf)))
-    im_eq = np.interp(im_orig, bin_edges[:-1], norm_cdf).astype(np.float32) / MAX_PIX_VAL
-    hist_eq, bin_edges_eq = np.histogram(im_eq * MAX_PIX_VAL, MAX_PIX_VAL + 1, [MIN_PIX_VAL, MAX_PIX_VAL])
-
+    im_orig = (im_orig * MAX_PIX_VAL).round().astype(np.uint8)
+    im_eq = np.interp(im_orig, bin_edges[:-1], norm_cdf)
+    hist_eq, bin_edges_eq = np.histogram(im_eq, MAX_PIX_VAL + 1, [MIN_PIX_VAL, MAX_PIX_VAL])
+    im_eq = im_eq.astype(np.float32) / MAX_PIX_VAL
     if yiq_mat is not None:  # im_eq needs to convert to RGB
         yiq_mat[:, :, 0] = im_eq
         im_eq = yiq2rgb(yiq_mat).clip(0, 1)
@@ -156,31 +157,31 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> np.ndarray:
         val = (i/n_quant)*max(cdf)
         z_arr[i] = np.searchsorted(cdf, val)
     z_arr[n_quant] = MAX_PIX_VAL  # last val is 255
+    print(z_arr)
     q_arr = np.zeros(n_quant, int)
     for it in range(n_iter):
-
         curr_err = 0
         # calc q and the error of the current iteration
+        z_min = 0
         for i in range(n_quant):  # TODO check the borders, right now each z_i is calculates twice (except 0 and 255)
-            z_min = z_arr[i]
             z_max = z_arr[i+1]
-            print(z_min,z_max)
-            q_arr[i] = np.average(np.arange(z_min, z_max+1), weights=hist_orig[z_min:z_max+1])
+            q_arr[i] = (np.dot(hist_orig[z_arr[i]:z_arr[i+1]+1], np.arange(z_arr[i], z_arr[i+1]+1)) /
+                        np.sum(hist_orig[z_arr[i]:z_arr[i+1]+1])).round().astype(np.uint32)
 
             # calc error:
             curr_err += sum(hist_orig[z_min:z_max+1] * np.square(np.arange(z_min, z_max+1) - q_arr[i]))
+            z_min = z_max+1
 
         errors_arr.append(curr_err)
 
         # calc new z values, the borders (0 and 255) remains the same:
         new_z_arr = np.zeros(n_quant + 1, int)
         for i in range(1, n_quant):  # start from 1, first val is 0
-            new_z_arr[i] = np.searchsorted(hist_orig, (q_arr[i-1] + q_arr[i]) / 2) # TODO solve bug: new Z is small values!
+            new_z_arr[i] = ((q_arr[i-1] + q_arr[i]) / 2).round().astype(np.uint32)
         new_z_arr[n_quant] = MAX_PIX_VAL  # last val is 255
 
-        if False in (new_z_arr == z_arr):
+        if not np.array_equal(new_z_arr, z_arr):
             z_arr = new_z_arr.copy()
-            print(z_arr)
         else:  # got convergence!
             break
 
@@ -188,8 +189,8 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> np.ndarray:
     # quantise the histogram
     for i in range(n_quant):
         hist_orig[z_arr[i]:z_arr[i+1]+1] = q_arr[i]
-
-    im_quant = np.interp(im_orig, bin_edges[:-1], hist_orig).astype(np.float32) / MAX_PIX_VAL
+    # TODO solve bug: im_quant in case of RGB should be 2DIM
+    im_quant = np.interp((im_orig*255).round().astype(np.uint32), bin_edges[:-1], hist_orig).astype(np.float32) / MAX_PIX_VAL
     if yiq_mat is not None:  # im_eq needs to convert to RGB
         yiq_mat[:, :, 0] = im_quant
         im_quant = yiq2rgb(yiq_mat).clip(0, 1)
@@ -197,10 +198,10 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> np.ndarray:
     return im_quant, errors_arr
 
 
-res = quantize(read_image("tests/external/jerusalem.jpg", 1),4,5)
+res = quantize(read_image("tests/external/Low Contrast.jpg", 2),3,50)
 f = plt.figure()
 f.add_subplot(1, 2, 1)
-plt.imshow(read_image("tests/external/jerusalem.jpg", 1), cmap=plt.cm.gray)
+plt.imshow(read_image("tests/external/Low Contrast.jpg", 2), cmap=plt.cm.gray)
 f.add_subplot(1, 2, 2)
 plt.imshow(res[0], cmap=plt.cm.gray)
 plt.show()
