@@ -175,7 +175,7 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> np.ndarray:
         # calc new z values, the borders (0 and 255) remains the same:
         new_z_arr = np.zeros(n_quant + 1, int)
         for i in range(1, n_quant):  # start from 1, first val is 0
-            new_z_arr[i] = np.searchsorted(cdf, (q_arr[i-1] + q_arr[i]) / 2) # TODO solve bug: new Z is not sorted
+            new_z_arr[i] = np.searchsorted(hist_orig, (q_arr[i-1] + q_arr[i]) / 2) # TODO solve bug: new Z is not sorted
         new_z_arr[n_quant] = MAX_PIX_VAL  # last val is 255
 
         if False in (new_z_arr == z_arr):
