@@ -8,6 +8,7 @@ COLOR = 2
 RGBDIM = 3
 MIN_PIX_VAL = 0
 MAX_PIX_VAL = 255
+MIN_QUANTS = MIN_ITERS =1
 
 def is_valid_args(filename: str, representation: int) -> bool:
     """
@@ -65,10 +66,10 @@ def imdisplay(filename: str, representation: int) -> None:
             plt.imshow(read_image(filename, representation), cmap=plt.cm.gray)
         else:
             plt.imshow(read_image(filename, representation))
-    except:
-        raise
-    else:
-        plt.show()
+    except Exception as exc:
+        raise exc
+
+    plt.show()
 
 
 def rgb2yiq(imRGB: np.ndarray) -> np.ndarray:
@@ -91,7 +92,6 @@ def yiq2rgb(imYIQ: np.ndarray) -> np.ndarray:
     :param imYIQ: height×width×3 np.float32 matrix with values in [0, 1]
     :return: RGB image
     """
-
     trans_mat = np.array([[1, 0.956, 0.621], [1, -0.272, -0.647], [1, -1.106, 1.703]]).astype(np.float32)
     if is_rgb(imYIQ):
         return imYIQ.dot(trans_mat.T)
@@ -112,11 +112,13 @@ def get_hist_cdf_and_yiq(im_orig: np.ndarray) -> tuple:
     yiq_mat - the YIQ matrix in case of a RGB image, None otherwise
     """
     yiq_mat = None
-    if is_rgb(im_orig):
-        yiq_mat = rgb2yiq(im_orig)  # convert to YIQ and take only Y matrix
-        im_orig = yiq_mat[:, :, 0]
-
-    im = (im_orig * MAX_PIX_VAL).round().astype(np.uint8)
+    try:
+        if is_rgb(im_orig):
+            yiq_mat = rgb2yiq(im_orig)  # convert to YIQ and take only Y matrix
+            im_orig = yiq_mat[:, :, 0]
+    except Exception as exc:
+        raise exc
+    im = (im_orig * MAX_PIX_VAL).round().astype(np.uint32)
     hist_orig, bin_edges = np.histogram(im, MAX_PIX_VAL + 1, [MIN_PIX_VAL, MAX_PIX_VAL])
     cdf = np.cumsum(hist_orig)
 
@@ -132,10 +134,12 @@ def histogram_equalize(im_orig: np.ndarray) -> tuple:
     hist_orig - is a 256 bin histogram of the original image.
     hist_eq - is a 256 bin histogram of the equalized image.
     """
-    # TODO try catch
-    im_orig, hist_orig, bin_edges, cdf, yiq_mat = get_hist_cdf_and_yiq(im_orig)
+    try:
+        im, hist_orig, bin_edges, cdf, yiq_mat = get_hist_cdf_and_yiq(im_orig)
+    except Exception as exc:
+        raise exc
     norm_cdf = np.round(MAX_PIX_VAL * (cdf - min(cdf)) / (max(cdf) - min(cdf)))
-    im_eq = np.interp(im_orig, bin_edges[:-1], norm_cdf)
+    im_eq = np.interp(im, bin_edges[:-1], norm_cdf)
     hist_eq, bin_edges_eq = np.histogram(im_eq, MAX_PIX_VAL + 1, [MIN_PIX_VAL, MAX_PIX_VAL])
     im_eq = im_eq.astype(np.float32) / MAX_PIX_VAL
     if yiq_mat is not None:  # im_eq needs to convert to RGB
@@ -156,20 +160,26 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
     im_quant - the quantize output image.
     errors_arr - is an array of the total intensities error for each iteration in the quantization procedure.
     """
+    if n_quant < MIN_QUANTS or n_iter < MIN_ITERS:
+        raise Exception("Please provide legal n_quant and n_iter")
 
-    # TODO args check
     errors_arr = []
-    im_orig, hist_orig, bin_edges, cdf, yiq_mat = get_hist_cdf_and_yiq(im_orig)
+    try:
+        im, hist_orig, bin_edges, cdf, yiq_mat = get_hist_cdf_and_yiq(im_orig)
+    except Exception as exc:
+        raise exc
+
+    # check that image actually needs and can optimize:
+    quants_of_im = np.count_nonzero(hist_orig)
+    if quants_of_im < n_quant:
+        raise Exception("n_quant smaller than actual quants of image")
+    elif quants_of_im == n_quant:  # image already optimized
+        return im_orig, np.array([0])
 
     # calc initial z
-
-    # z_arr = np.array([np.searchsorted(cdf, (i/n_quant)*max(cdf)) for i in range(1, n_quant)])
-    # z_arr = np.insert(z_arr, 0, 0)
-    # np.append(z_arr)
-    z_arr = np.zeros(n_quant + 1, int)
-    for i in range(1, n_quant):  # start from 1, first val is 0
-        z_arr[i] = np.searchsorted(cdf, (i/n_quant)*max(cdf))
-    z_arr[n_quant] = MAX_PIX_VAL  # last val is 255
+    z_arr = np.array([MIN_PIX_VAL, MAX_PIX_VAL])  # z_0 = 0, z_k = 255
+    z_arr = np.insert(z_arr, 1,
+                      [np.searchsorted(cdf, np.int32((i/n_quant) * max(cdf))) for i in range(1, n_quant)])
 
     q_arr = np.zeros(n_quant, int)
 
@@ -201,17 +211,21 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
     for i in range(n_quant):
         hist_orig[z_arr[i]:z_arr[i+1]+1] = q_arr[i]
 
-    im_quant = np.interp(im_orig, bin_edges[:-1], hist_orig).astype(np.float32) / MAX_PIX_VAL
+    im_quant = np.interp(im, bin_edges[:-1], hist_orig).astype(np.float32) / MAX_PIX_VAL
+    # im_quant = hist_orig[im].astype(np.float32) / MAX_PIX_VAL # TODO dell
 
-    if yiq_mat is not None:  # im_eq needs to convert to RGB
+    if yiq_mat is not None:  # im_eq needs to convert back to RGB
         yiq_mat[:, :, 0] = im_quant
         im_quant = yiq2rgb(yiq_mat).clip(0, 1)
 
     return im_quant, np.array(errors_arr)
 
+
+
 # TODO dell
 res1 = quantize(read_image("tests/external/monkey.jpg", 1), 100, 50)
-res2 = quantize(read_image("tests/external/monkey.jpg", 2), 100, 50)
+quantize(res1[0], 100, 5)
+res2 = quantize(read_image("tests/external/monkey.jpg", 2), 4, 5)
 print(res1[1].shape, res2[1].shape)
 f = plt.figure()
 f.add_subplot(2, 3, 1)
