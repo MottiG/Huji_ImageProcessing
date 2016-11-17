@@ -33,8 +33,8 @@ def presubmit():
   
   print ('Reading images')
   try:
-    im_rgb = sol1.my_imread(filename, 2)
-    im_gray = sol1.my_imread(filename, 1)
+    im_rgb = sol1.read_image(filename, 2)
+    im_gray = sol1.read_image(filename, 1)
   except:
     print ('Failed!')
     return False
@@ -51,7 +51,7 @@ def presubmit():
   print ('Section 3.4')
   try:
     print ('- Histogram equalization...')
-    im_orig = sol1.my_imread('external/Low Contrast.jpg', 2)
+    im_orig = sol1.read_image('external/Low Contrast.jpg', 2)
     im_eq, hist_orig, hist_eq = sol1.histogram_equalize(im_orig)
     if hist_orig.size is not 256 or hist_eq.size is not 256:
       print ('incorrect number of bins in histogram') 
@@ -64,8 +64,8 @@ def presubmit():
   print ('Section 3.5')
   try:
     print ('- Image quantization...')
-    im_orig = sol1.my_imread('external/jerusalem.jpg', 1);
-    im_quant, err = sol1.quantize_image(im_orig, 6, 3);
+    im_orig = sol1.read_image('external/jerusalem.jpg', 1);
+    im_quant, err = sol1.quantize(im_orig, 6, 3);
     if len(err) is not 3:
       print ('incorrect number of elements in err') 
       print ('Failed!')

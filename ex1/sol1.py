@@ -10,6 +10,7 @@ MIN_PIX_VAL = 0
 MAX_PIX_VAL = 255
 MIN_QUANTS = MIN_ITERS = 1
 
+
 def is_valid_args(filename: str, representation: int) -> bool:
     """
     Basic checks on the functions input
@@ -191,7 +192,6 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
             z_max = z_arr[i+1]
             q_arr[i] = (hist_orig[z_arr[i]:z_arr[i+1]+1].dot(np.arange(z_arr[i], z_arr[i+1]+1)) /
                         np.sum(hist_orig[z_arr[i]:z_arr[i+1]+1])).round().astype(np.uint32)
-
             # calc error:
             curr_err += hist_orig[z_min:z_max+1].dot(np.square(np.arange(z_min, z_max+1) - q_arr[i]))
             z_min = z_max+1
@@ -210,8 +210,6 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
         hist_orig[z_arr[i]:z_arr[i+1]+1] = q_arr[i]
 
     im_quant = np.interp(im, bin_edges[:-1], hist_orig).astype(np.float32) / MAX_PIX_VAL
-    # im_quant = hist_orig[im].astype(np.float32) / MAX_PIX_VAL # TODO dell
-
     if yiq_mat is not None:  # im_eq needs to convert back to RGB
         yiq_mat[:, :, 0] = im_quant
         im_quant = yiq2rgb(yiq_mat).clip(0, 1)
@@ -219,31 +217,3 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
     return im_quant, np.array(errors_arr)
 
 
-
-# TODO dell
-# res1 = quantize(read_image("tests/external/monkey.jpg", 1), 100, 50)
-# quantize(res1[0], 100, 5)
-# res2 = quantize(read_image("tests/external/monkey.jpg", 2), 4, 5)
-# print(res1[1].shape, res2[1].shape)
-# f = plt.figure()
-# f.add_subplot(2, 3, 1)
-# plt.imshow(read_image("tests/external/monkey.jpg", 1), cmap=plt.cm.gray)
-# f.add_subplot(2, 3, 2)
-# plt.imshow(res1[0], cmap=plt.cm.gray)
-# f.add_subplot(2, 3, 3)
-# plt.plot(res1[1])
-# f.add_subplot(2, 3, 4)
-# plt.imshow(read_image("tests/external/monkey.jpg", 2), cmap=plt.cm.gray)
-# f.add_subplot(2, 3, 5)
-# plt.imshow(res2[0], cmap=plt.cm.gray)
-# f.add_subplot(2, 3, 6)
-# plt.plot(res2[1])
-# plt.show()
-
-# res = histogram_equalize(read_image("tests/external/monkey.jpg", 2))
-# f = plt.figure()
-# f.add_subplot(1, 2, 1)
-# plt.imshow(read_image("tests/external/monkey.jpg", 2), cmap=plt.cm.gray)
-# f.add_subplot(1, 2, 2)
-# plt.imshow(res[0], cmap=plt.cm.gray)
-# plt.show()
