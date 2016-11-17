@@ -8,7 +8,7 @@ COLOR = 2
 RGBDIM = 3
 MIN_PIX_VAL = 0
 MAX_PIX_VAL = 255
-MIN_QUANTS = MIN_ITERS =1
+MIN_QUANTS = MIN_ITERS = 1
 
 def is_valid_args(filename: str, representation: int) -> bool:
     """
@@ -149,7 +149,6 @@ def histogram_equalize(im_orig: np.ndarray) -> tuple:
     return im_eq, hist_orig, hist_eq
 
 
-
 def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
     """
     perform optimal quantization of a given greyscale or RGB image.
@@ -160,7 +159,7 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
     im_quant - the quantize output image.
     errors_arr - is an array of the total intensities error for each iteration in the quantization procedure.
     """
-    if n_quant < MIN_QUANTS or n_iter < MIN_ITERS:
+    if n_quant < MIN_QUANTS or n_quant > MAX_PIX_VAL or n_iter < MIN_ITERS:
         raise Exception("Please provide legal n_quant and n_iter")
 
     errors_arr = []
@@ -178,8 +177,7 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
 
     # calc initial z
     z_arr = np.array([MIN_PIX_VAL, MAX_PIX_VAL])  # z_0 = 0, z_k = 255
-    z_arr = np.insert(z_arr, 1,
-                      [np.searchsorted(cdf, np.int32((i/n_quant) * max(cdf))) for i in range(1, n_quant)])
+    z_arr = np.insert(z_arr, 1, [np.searchsorted(cdf, np.int32((i/n_quant)*max(cdf))) for i in range(1, n_quant)])
 
     q_arr = np.zeros(n_quant, int)
 
@@ -223,22 +221,29 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
 
 
 # TODO dell
-res1 = quantize(read_image("tests/external/monkey.jpg", 1), 100, 50)
-quantize(res1[0], 100, 5)
-res2 = quantize(read_image("tests/external/monkey.jpg", 2), 4, 5)
-print(res1[1].shape, res2[1].shape)
-f = plt.figure()
-f.add_subplot(2, 3, 1)
-plt.imshow(read_image("tests/external/monkey.jpg", 1), cmap=plt.cm.gray)
-f.add_subplot(2, 3, 2)
-plt.imshow(res1[0], cmap=plt.cm.gray)
-f.add_subplot(2, 3, 3)
-plt.plot(res1[1])
-f.add_subplot(2, 3, 4)
-plt.imshow(read_image("tests/external/monkey.jpg", 2), cmap=plt.cm.gray)
-f.add_subplot(2, 3, 5)
-plt.imshow(res2[0], cmap=plt.cm.gray)
-f.add_subplot(2, 3, 6)
-plt.plot(res2[1])
-plt.show()
+# res1 = quantize(read_image("tests/external/monkey.jpg", 1), 100, 50)
+# quantize(res1[0], 100, 5)
+# res2 = quantize(read_image("tests/external/monkey.jpg", 2), 4, 5)
+# print(res1[1].shape, res2[1].shape)
+# f = plt.figure()
+# f.add_subplot(2, 3, 1)
+# plt.imshow(read_image("tests/external/monkey.jpg", 1), cmap=plt.cm.gray)
+# f.add_subplot(2, 3, 2)
+# plt.imshow(res1[0], cmap=plt.cm.gray)
+# f.add_subplot(2, 3, 3)
+# plt.plot(res1[1])
+# f.add_subplot(2, 3, 4)
+# plt.imshow(read_image("tests/external/monkey.jpg", 2), cmap=plt.cm.gray)
+# f.add_subplot(2, 3, 5)
+# plt.imshow(res2[0], cmap=plt.cm.gray)
+# f.add_subplot(2, 3, 6)
+# plt.plot(res2[1])
+# plt.show()
 
+# res = histogram_equalize(read_image("tests/external/monkey.jpg", 2))
+# f = plt.figure()
+# f.add_subplot(1, 2, 1)
+# plt.imshow(read_image("tests/external/monkey.jpg", 2), cmap=plt.cm.gray)
+# f.add_subplot(1, 2, 2)
+# plt.imshow(res[0], cmap=plt.cm.gray)
+# plt.show()
