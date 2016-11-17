@@ -1,0 +1,2 @@
+When we calculate the Z values we divide by the sum of the pixels in the current segment.
+So, in case of an empty segment we will divide by zero!
