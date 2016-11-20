@@ -140,8 +140,7 @@ def histogram_equalize(im_orig: np.ndarray) -> tuple:
     except Exception as exc:
         raise exc
     norm_cdf = np.round(MAX_PIX_VAL * (cdf - min(cdf)) / (max(cdf) - min(cdf)))
-    # im_eq = np.interp(im, bin_edges[:-1], norm_cdf)
-    im_eq = norm_cdf[im]
+    im_eq = norm_cdf[im]  # create new image
     hist_eq, bin_edges_eq = np.histogram(im_eq, MAX_PIX_VAL + 1, [MIN_PIX_VAL, MAX_PIX_VAL])
     im_eq = im_eq.astype(np.float32) / MAX_PIX_VAL
     if yiq_mat is not None:  # im_eq needs to convert to RGB
@@ -170,13 +169,6 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
     except Exception as exc:
         raise exc
 
-    # check that image actually needs and can optimize:
-    quants_of_im = np.count_nonzero(hist_orig)
-    if quants_of_im < n_quant:
-        raise Exception("n_quant smaller than actual quants of image")
-    elif quants_of_im == n_quant:  # image already optimized
-        return im_orig, np.array([0])
-
     # calc initial z
     z_arr = np.array([MIN_PIX_VAL, MAX_PIX_VAL])  # z_0 = 0, z_k = 255
     z_arr = np.insert(z_arr, 1, [np.searchsorted(cdf, np.int32((i/n_quant)*max(cdf))) for i in range(1, n_quant)])
@@ -188,14 +180,11 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
         curr_err = 0
 
         # calc q and the error of the current iteration
-        z_min = 0
         for i in range(n_quant):
-            z_max = z_arr[i+1]
             q_arr[i] = (hist_orig[z_arr[i]:z_arr[i+1]+1].dot(np.arange(z_arr[i], z_arr[i+1]+1)) /
                         np.sum(hist_orig[z_arr[i]:z_arr[i+1]+1])).round().astype(np.uint32)
             # calc error:
-            curr_err += hist_orig[z_min:z_max+1].dot(np.square(np.arange(z_min, z_max+1) - q_arr[i]))
-            z_min = z_max+1
+            curr_err += hist_orig[z_arr[i]:z_arr[i+1]+1].dot(np.square(np.arange(z_arr[i], z_arr[i+1]+1) - q_arr[i]))
 
         # calc new z values, the borders (0 and 255) remains the same, so calc only z_i:
         new_z_arr = np.array([((q_arr[i] + q_arr[i+1]) / 2).round().astype(np.uint32) for i in range(n_quant-1)])
@@ -211,13 +200,31 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
     for i in range(n_quant):
         lut[z_arr[i]:z_arr[i+1]+1] = q_arr[i]
 
-    im_quant = lut[im].astype(np.float32) / MAX_PIX_VAL
+    im_quant = lut[im].astype(np.float32) / MAX_PIX_VAL  # create new image
+
+    #TODO DELL
+    hist, bin_edges = np.histogram(im_quant, MAX_PIX_VAL + 1)
+    a = np.count_nonzero(hist)#TODO DELL
+    print(a)#TODO DELL
 
     if yiq_mat is not None:  # im_eq needs to convert back to RGB
         yiq_mat[:, :, 0] = im_quant
         im_quant = yiq2rgb(yiq_mat).clip(0, 1)
 
     return im_quant, np.array(errors_arr)
+
+
+def stretch_arr(arr, stretch_length):
+    """
+    help function to stretch arrays to a given additional length, with the last element of the array
+    :param arr: array to stretch
+    :param stretch_length:
+    :return:
+    """
+    if stretch_length > 0:  # if arr it's not already the longest array
+        new_arr = np.full((stretch_length,), arr[-1], dtype=np.int64)
+        arr = np.concatenate((arr, new_arr))
+    return arr
 
 
 def quantize_rgb(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
@@ -230,24 +237,22 @@ def quantize_rgb(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
     im_quant - the quantize output image.
     errors_arr - is an array of the total intensities error for each iteration in the quantization procedure.
     """
-    # quantize each color:
-    r_quant = quantize(im_orig[:, :, 0], n_quant, n_iter)
-    g_quant = quantize(im_orig[:, :, 1], n_quant, n_iter)
-    b_quant = quantize(im_orig[:, :, 2], n_quant, n_iter)
+    err_list = []
+    # quantize each color and append the error to the err_arr:
+    for i in range(RGBDIM):
+        im_quant, im_err = quantize(im_orig[:, :, i], n_quant, n_iter)
+        im_orig[:, :, i] = im_quant
+        err_list.append(im_err)
 
-    # update image colors:
-    im_orig[:, :, 0] = r_quant[0]  # update R matrix
-    im_orig[:, :, 1] = g_quant[0]  # update G matrix
-    im_orig[:, :, 2] = b_quant[0]  # update B matrix
+    # stretch all errors' arrays to the max length:
+    max_len = max(len(err) for err in err_list)
+    for i in range(RGBDIM):
+        err_list[i] = stretch_arr(err_list[i], max_len - len(err_list[i]))
 
-    # calc error:
-    r_err = r_quant[1]
-    g_err = g_quant[1]
-    b_err = b_quant[1]
+    # create new array with the average of the errors
+    err = (np.array([i+j+k for i,j,k in zip(err_list[0], err_list[1], err_list[2])]) / RGBDIM).astype(np.int64)
 
-    # TODO calc error array
-
-
+    return im_orig, err
 
 
 
@@ -258,24 +263,31 @@ def quantize_rgb(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
 # plt.plot(res[1])
 # plt.plot(res[2],'r')
 # plt.show()
-#
-res1 = quantize(read_image("tests/external/monkey.jpg", 2), 50, 50)
-# quantize(res1[0],100,5)
-#
-res2 = quantize(read_image("tests/external/monkey.jpg", 1), 50, 50)
 
-f = plt.figure()
-f.add_subplot(2, 3, 1)
-plt.imshow(read_image("tests/external/monkey.jpg", 2), cmap=plt.cm.gray)
-f.add_subplot(2, 3, 2)
-plt.imshow(res1[0], cmap=plt.cm.gray)
-f.add_subplot(2, 3, 3)
-plt.plot(res1[1])
-f.add_subplot(2, 3, 4)
-plt.imshow(read_image("tests/external/monkey.jpg", 1), cmap=plt.cm.gray)
-f.add_subplot(2, 3, 5)
-plt.imshow(res2[0], cmap=plt.cm.gray)
-f.add_subplot(2, 3, 6)
-plt.plot(res2[1])
-plt.show()
+# res1 = quantize(read_image("tests/external/jerusalem.jpg", 2), 4, 5)
+# res2 = quantize(read_image("tests/external/jerusalem.jpg", 1), 4, 5)
+#
+# f = plt.figure()
+# f.add_subplot(2, 3, 1)
+# plt.imshow(read_image("tests/external/jerusalem.jpg", 2), cmap=plt.cm.gray)
+# f.add_subplot(2, 3, 2)
+# plt.imshow(res1[0], cmap=plt.cm.gray)
+# f.add_subplot(2, 3, 3)
+# plt.plot(res1[1])
+# f.add_subplot(2, 3, 4)
+# plt.imshow(read_image("tests/external/jerusalem.jpg", 1), cmap=plt.cm.gray)
+# f.add_subplot(2, 3, 5)
+# plt.imshow(res2[0], cmap=plt.cm.gray)
+# f.add_subplot(2, 3, 6)
+# plt.plot(res2[1])
+# plt.show()
 
+# res = quantize_rgb(read_image("tests/external/jerusalem.jpg", 2), 2, 5)
+# f = plt.figure()
+# f.add_subplot(1, 2, 1)
+# plt.imshow(read_image("tests/external/jerusalem.jpg", 2))
+# f.add_subplot(1, 2, 2)
+# plt.imshow(res[0])
+# plt.show()
+# plt.plot(res[1])
+# plt.show()
