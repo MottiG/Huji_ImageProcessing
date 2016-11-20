@@ -204,7 +204,6 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
         if not np.array_equal(new_z_arr, z_arr[1:-1]):
             z_arr[1:-1] = new_z_arr
         else:  # got convergence!
-            print("CONVERGE")
             break
 
     # make a look-up-table of the new quants:
@@ -221,6 +220,37 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
     return im_quant, np.array(errors_arr)
 
 
+def quantize_rgb(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
+    """
+    perform optimal quantization of a given RGB image.
+    :param im_orig: RGB float32 image with values in [0, 1]
+    :param n_quant: the number of intensities your output im_quant image should have.
+    :param n_iter: the maximum number of iterations of the optimization procedure (may converge earlier).
+    :return: [im_quant, errors_arr] -
+    im_quant - the quantize output image.
+    errors_arr - is an array of the total intensities error for each iteration in the quantization procedure.
+    """
+    # quantize each color:
+    r_quant = quantize(im_orig[:, :, 0], n_quant, n_iter)
+    g_quant = quantize(im_orig[:, :, 1], n_quant, n_iter)
+    b_quant = quantize(im_orig[:, :, 2], n_quant, n_iter)
+
+    # update image colors:
+    im_orig[:, :, 0] = r_quant[0]  # update R matrix
+    im_orig[:, :, 1] = g_quant[0]  # update G matrix
+    im_orig[:, :, 2] = b_quant[0]  # update B matrix
+
+    # calc error:
+    r_err = r_quant[1]
+    g_err = g_quant[1]
+    b_err = b_quant[1]
+
+    # TODO calc error array
+
+
+
+
+
 # TODO dell
 # res = histogram_equalize(read_image("tests/external/jerusalem.jpg", 1))
 # plt.imshow(res[0], cmap=plt.cm.gray)
@@ -228,24 +258,24 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
 # plt.plot(res[1])
 # plt.plot(res[2],'r')
 # plt.show()
-# # #
-# res1 = quantize(read_image("tests/external/monkey.jpg", 1), 100, 5)
+#
+res1 = quantize(read_image("tests/external/monkey.jpg", 2), 50, 50)
 # quantize(res1[0],100,5)
-# #
-# res2 = quantize(read_image("tests/external/monkey.jpg", 2), 4, 5)
 #
-# f = plt.figure()
-# f.add_subplot(2, 3, 1)
-# plt.imshow(read_image("tests/external/monkey.jpg", 1), cmap=plt.cm.gray)
-# f.add_subplot(2, 3, 2)
-# plt.imshow(res1[0], cmap=plt.cm.gray)
-# f.add_subplot(2, 3, 3)
-# plt.plot(res1[1])
-# f.add_subplot(2, 3, 4)
-# plt.imshow(read_image("tests/external/monkey.jpg", 2), cmap=plt.cm.gray)
-# f.add_subplot(2, 3, 5)
-# plt.imshow(res2[0], cmap=plt.cm.gray)
-# f.add_subplot(2, 3, 6)
-# plt.plot(res2[1])
-# plt.show()
-#
+res2 = quantize(read_image("tests/external/monkey.jpg", 1), 50, 50)
+
+f = plt.figure()
+f.add_subplot(2, 3, 1)
+plt.imshow(read_image("tests/external/monkey.jpg", 2), cmap=plt.cm.gray)
+f.add_subplot(2, 3, 2)
+plt.imshow(res1[0], cmap=plt.cm.gray)
+f.add_subplot(2, 3, 3)
+plt.plot(res1[1])
+f.add_subplot(2, 3, 4)
+plt.imshow(read_image("tests/external/monkey.jpg", 1), cmap=plt.cm.gray)
+f.add_subplot(2, 3, 5)
+plt.imshow(res2[0], cmap=plt.cm.gray)
+f.add_subplot(2, 3, 6)
+plt.plot(res2[1])
+plt.show()
+
