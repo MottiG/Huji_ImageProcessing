@@ -202,11 +202,6 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
 
     im_quant = lut[im].astype(np.float32) / MAX_PIX_VAL  # create new image
 
-    #TODO DELL
-    hist, bin_edges = np.histogram(im_quant, MAX_PIX_VAL + 1)
-    a = np.count_nonzero(hist)#TODO DELL
-    print(a)#TODO DELL
-
     if yiq_mat is not None:  # im_eq needs to convert back to RGB
         yiq_mat[:, :, 0] = im_quant
         im_quant = yiq2rgb(yiq_mat).clip(0, 1)
@@ -237,6 +232,9 @@ def quantize_rgb(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
     im_quant - the quantize output image.
     errors_arr - is an array of the total intensities error for each iteration in the quantization procedure.
     """
+    if not is_rgb(im_orig):
+        raise Exception("The image is not a RGB image")
+
     err_list = []
     # quantize each color and append the error to the err_arr:
     for i in range(RGBDIM):
@@ -255,39 +253,3 @@ def quantize_rgb(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
     return im_orig, err
 
 
-
-# TODO dell
-# res = histogram_equalize(read_image("tests/external/jerusalem.jpg", 1))
-# plt.imshow(res[0], cmap=plt.cm.gray)
-# plt.show()
-# plt.plot(res[1])
-# plt.plot(res[2],'r')
-# plt.show()
-
-# res1 = quantize(read_image("tests/external/jerusalem.jpg", 2), 4, 5)
-# res2 = quantize(read_image("tests/external/jerusalem.jpg", 1), 4, 5)
-#
-# f = plt.figure()
-# f.add_subplot(2, 3, 1)
-# plt.imshow(read_image("tests/external/jerusalem.jpg", 2), cmap=plt.cm.gray)
-# f.add_subplot(2, 3, 2)
-# plt.imshow(res1[0], cmap=plt.cm.gray)
-# f.add_subplot(2, 3, 3)
-# plt.plot(res1[1])
-# f.add_subplot(2, 3, 4)
-# plt.imshow(read_image("tests/external/jerusalem.jpg", 1), cmap=plt.cm.gray)
-# f.add_subplot(2, 3, 5)
-# plt.imshow(res2[0], cmap=plt.cm.gray)
-# f.add_subplot(2, 3, 6)
-# plt.plot(res2[1])
-# plt.show()
-
-# res = quantize_rgb(read_image("tests/external/jerusalem.jpg", 2), 2, 5)
-# f = plt.figure()
-# f.add_subplot(1, 2, 1)
-# plt.imshow(read_image("tests/external/jerusalem.jpg", 2))
-# f.add_subplot(1, 2, 2)
-# plt.imshow(res[0])
-# plt.show()
-# plt.plot(res[1])
-# plt.show()
