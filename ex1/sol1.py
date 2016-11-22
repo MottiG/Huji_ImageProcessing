@@ -204,7 +204,7 @@ def quantize(im_orig: np.ndarray, n_quant: int, n_iter: int) -> tuple:
 
     if yiq_mat is not None:  # im_eq needs to convert back to RGB
         yiq_mat[:, :, 0] = im_quant
-        im_quant = yiq2rgb(yiq_mat).clip(0, 1)
+        im_quant = yiq2rgb(yiq_mat)
 
     return im_quant, np.array(errors_arr)
 
