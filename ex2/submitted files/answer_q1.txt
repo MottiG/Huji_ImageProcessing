@@ -1,0 +1,2 @@
+The convolution derivative is only approximation for a function (or signal in our case) derivative.
+while the fourier derivative is actually the formula of discrete fourier transform derivative.

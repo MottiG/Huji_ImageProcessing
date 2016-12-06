@@ -1,0 +1,6 @@
+We didn't shift the input image, so the center is (0,0). but, we build the 
+kernel with center in the middle (and zeros around). so trying to multiply the image
+and the kernel without inverse-shifting the kernel, doesn't make any sense and will 
+produce a corrupted image (4 different slices of the image, in 4 directions). 
+When we inverse-shifting the kernel we change its center to be
+also in (0,0) so the multiplication is correct.

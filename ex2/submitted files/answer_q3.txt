@@ -1,0 +1,5 @@
+If we are using boundaries='wrap' in the convolution, we get (almost) the same results,
+since the convolution will use g (the kernel) as periodic, like fourier. 
+If not, we will get slightly different results (black boundaries in the spatial) due to 
+the fact that the boundaries are not treated with the same method and the convolution fills
+the boundaries with zero.
