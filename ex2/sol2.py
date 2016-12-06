@@ -6,6 +6,25 @@ CONJUGATE = -1
 GAUSSIAN_BASE = np.ones((1, 2), np.float32)  # gaussian kernel base - [1 1] vector
 
 
+# # # # # # # # # # START OF COPY&PASTE FROM EX1 - THE PRESUBMIT USES THE READ_IMAGE FUNCTION # # # # # # # # # #
+from scipy.misc import imread
+from skimage.color import rgb2gray
+GREYSCALE, COLOR, RGBDIM = 1, 2, 3
+MAX_PIX_VAL = 255
+def is_valid_args(filename: str, representation: int) -> bool:
+    return (filename is not None) and (representation == 1 or representation == 2) and isinstance(filename, str)
+def is_rgb(im: np.ndarray) -> bool: return im.ndim == RGBDIM
+def read_image(filename: str, representation: int) -> np.ndarray:
+    if not is_valid_args(filename, representation):
+        raise Exception("Please provide valid filename and representation code")
+    try: im = imread(filename)
+    except OSError: raise Exception("Filename should be valid image filename")
+    if is_rgb(im) and (representation == GREYSCALE): return rgb2gray(im).astype(np.float32)
+    elif not is_rgb(im) and (representation == COLOR): raise Exception("Converting greyscale to RGB is not supported")
+    return im.astype(np.float32) / MAX_PIX_VAL
+# # # # # # # # # # # # # # # # # # # # END OF COPY&PASTE FROM EX1 # # # # # # # # # # # # # # # # # # # #
+
+
 def magnitude(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     """
     get magnitude of image as float32 dtype
@@ -125,7 +144,7 @@ def blur_spatial(im: np.ndarray, kernel_size: int) -> np.ndarray:
         raise Exception("kernel_size must be smaller or equal to the smallest dimension of the image")
 
     g = gaussian_kernel(kernel_size)
-    blur_im = sp_signal.convolve2d(im, g, 'same')
+    blur_im = sp_signal.convolve2d(im, g, 'same', 'wrap')  # using boundaries='wrap' so we will get periodic
     return blur_im
 
 
@@ -148,7 +167,7 @@ def blur_fourier(im: np.ndarray, kernel_size: int) -> np.ndarray:
     min_col_idx = int(np.floor(n/2) - np.floor(kernel_size/2))
     max_col_idx = int(np.floor(n / 2) + np.floor(kernel_size / 2)) + 1
     g[min_row_idx:max_row_idx, min_col_idx:max_col_idx] = kernel  # put the kernel in center of g
-    g = np.fft.ifftshift(g)  # move center of g to (0,0)
+    g = np.fft.ifftshift(g)  # shift center of g to (0,0)
 
     # apply the filter and take only real part:
     blur_im = np.real(IDFT2(DFT2(im) * (DFT2(g)))).astype(np.float32)

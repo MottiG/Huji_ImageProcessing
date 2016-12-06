@@ -1,14 +1,14 @@
-from sol1 import *
+import matplotlib.pyplot as plt
 from sol2 import *
 
-im = read_image("ex1/tests/external/jerusalem.jpg", 1)
+im = read_image("tests/test/external/monkey.jpg", 1)
 
 # r1 = DFT2(im)
 # r1 = np.log(1 +np.abs(np.fft.fftshift(r1)))
 #
 r1 = blur_spatial(im, 25)
 r2 = blur_fourier(im, 25)
-
+print(np.allclose(r1,r2))
 f = plt.figure()
 a = f.add_subplot(1,2,1)
 a.title.set_text('blur_spatial')
