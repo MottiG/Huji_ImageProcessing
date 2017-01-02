@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 PYR_IDX = 0  # the index of pyr in the tuple returned by build_gaussian_pyramid function
 MIN_SIZE = 16  # minimum size of an image
-SAMPLE_FACTOR = 2  # determine the down/up sampling frequency - e.g. when reducing image, take one of each 2 pixels
+SAMPLE_FACTOR = 2  # determine down/up sampling frequency - e.g. when reducing image take one of each 2 pixels
 
 
 def gaussian_kernel(size: int) -> np.ndarray:
@@ -48,7 +48,7 @@ def expend(im: np.ndarray, blur_filter: np.ndarray) -> np.ndarray:
     :return: the expended image
     """
     expended_im = np.zeros(([SAMPLE_FACTOR*dim for dim in im.shape]), dtype=np.float32)
-    expended_im[1::SAMPLE_FACTOR, 1::SAMPLE_FACTOR] = im  # zero padding each odd index ((if SAMPLE_FACTOR==2))
+    expended_im[1::SAMPLE_FACTOR, 1::SAMPLE_FACTOR] = im  # zero padding each odd index (if SAMPLE_FACTOR==2)
     expended_im = filters.convolve(expended_im, blur_filter, mode='mirror')
     expended_im = filters.convolve(expended_im, blur_filter.T, mode='mirror')
     return expended_im
@@ -86,13 +86,19 @@ def build_laplacian_pyramid(im: np.ndarray, max_levels: int, filter_size: int) -
     return pyr, filter_vec
 
 
-def laplacian_to_image(lpyr: list, filter_vec: np.ndarray, coeff: typing.Union[list, np.ndarray]) -> np.ndarray:
+def laplacian_to_image(lpyr: list, filter_vec: np.ndarray, coeff: np.ndarray) -> np.ndarray:
     """
     :param lpyr: list of laplacian pyramid images
     :param filter_vec: the filter used to create the pyramid
     :param coeff: vector of coefficient numbers to multiply each level
     :return: the reconstructed image as np.ndarray
     """
+    im = lpyr[-1] * coeff[-1]
+    for i in range(len(lpyr)-1, 0, -1):
+        im = expend(im, filter_vec)
+        im += lpyr[i-1] * coeff[i-1]
+    return im
+
 
 
 
