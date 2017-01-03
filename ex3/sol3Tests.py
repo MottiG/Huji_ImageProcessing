@@ -19,8 +19,9 @@ def read_image(filename: str, representation: int) -> np.ndarray:
     # # # # # # # # # # # # # # # # # # # # END OF COPY&PASTE FROM EX1 # # # # # # # # # # # # # # # # # # # #
 
 
-im = read_image("im.jpg", 1)
-pyr, ker = build_laplacian_pyramid(im, 20, 3)
-newIm = laplacian_to_image(pyr, ker, [1,1,1,1,1,1,1])
-plt.imshow(newIm, cmap=plt.cm.gray)
-plt.show()
+im = read_image("im2.png", 1)
+pyr, ker = build_gaussian_pyramid(im, 20, 3)
+display_pyramid(pyr, 7)
+# newIm = laplacian_to_image(pyr, ker, [0.0005,0.0005,0.0005,0.0000005,0.00000000005,0.0005,0.0005])
+# plt.imshow(newIm, cmap=plt.cm.gray)
+# plt.show()
