@@ -49,8 +49,8 @@ def expend(im: np.ndarray, blur_filter: np.ndarray) -> np.ndarray:
     """
     expended_im = np.zeros(([SAMPLE_FACTOR*dim for dim in im.shape]), dtype=np.float32)
     expended_im[1::SAMPLE_FACTOR, 1::SAMPLE_FACTOR] = im  # zero padding each odd index (if SAMPLE_FACTOR==2)
-    expended_im = filters.convolve(expended_im, blur_filter, mode='mirror')
-    expended_im = filters.convolve(expended_im, blur_filter.T, mode='mirror')
+    expended_im = filters.convolve(expended_im, 2 * blur_filter, mode='mirror')
+    expended_im = filters.convolve(expended_im, 2 * blur_filter.T, mode='mirror')
     return expended_im
 
 
@@ -80,8 +80,7 @@ def build_laplacian_pyramid(im: np.ndarray, max_levels: int, filter_size: int) -
     :return: tuple contains list of the pyramid levels and the filter used to construct the pyramid
     """
     gauss_pyr, filter_vec = build_gaussian_pyramid(im, max_levels, filter_size)
-    doubled_filter = 2 * filter_vec
-    pyr = [gauss_pyr[i] - expend(gauss_pyr[i+1], doubled_filter) for i in range(len(gauss_pyr)-1)]
+    pyr = [gauss_pyr[i] - expend(gauss_pyr[i+1], filter_vec) for i in range(len(gauss_pyr)-1)]
     pyr.append(gauss_pyr[-1])  # add G_n level as is
     return pyr, filter_vec
 

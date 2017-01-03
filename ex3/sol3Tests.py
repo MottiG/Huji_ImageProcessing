@@ -20,7 +20,6 @@ def read_image(filename: str, representation: int) -> np.ndarray:
 
 
 im = read_image("im.jpg", 1)
-
 pyr, ker = build_laplacian_pyramid(im, 20, 3)
 newIm = laplacian_to_image(pyr, ker, [1,1,1,1,1,1,1])
 plt.imshow(newIm, cmap=plt.cm.gray)
