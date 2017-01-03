@@ -19,9 +19,29 @@ def read_image(filename: str, representation: int) -> np.ndarray:
     # # # # # # # # # # # # # # # # # # # # END OF COPY&PASTE FROM EX1 # # # # # # # # # # # # # # # # # # # #
 
 
-im = read_image("im2.png", 1)
-pyr, ker = build_gaussian_pyramid(im, 20, 3)
-display_pyramid(pyr, 7)
+# im = read_image("im2.png", 1)
+# pyr, ker = build_gaussian_pyramid(im, 20, 3)
+# display_pyramid(pyr, 7)
+
+blend2 = read_image(relpath('c.jpg'), 2)
+blend1 = read_image(relpath('aq.jpg'), 2)
+mask = read_image(relpath('mask1.jpg'), 1)
+
+mask = mask.astype(np.bool)
+mask_res = np.zeros((512, 1024, 3), dtype=np.float32)
+
+mask_res[:, :, 0] = pyramid_blending(blend1[:, :, 0], blend2[:, :, 0], mask, 6, 11, 7)
+mask_res[:, :, 1] = pyramid_blending(blend1[:, :, 1], blend2[:, :, 1], mask, 6, 11, 7)
+mask_res[:, :, 2] = pyramid_blending(blend1[:, :, 2], blend2[:, :, 2], mask, 6, 11, 7)
+
+
+plt.imshow(mask_res,  cmap=plt.cm.gray)
+plt.show()
+
+
+
+
+
 # newIm = laplacian_to_image(pyr, ker, [0.0005,0.0005,0.0005,0.0000005,0.00000000005,0.0005,0.0005])
 # plt.imshow(newIm, cmap=plt.cm.gray)
 # plt.show()

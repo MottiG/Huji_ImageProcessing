@@ -3,6 +3,7 @@ from scipy import signal as sp_signal
 from scipy.ndimage import filters
 from scipy.misc import imread
 import matplotlib.pyplot as plt
+import os
 
 PYR_IDX = 0  # the index of pyr in the tuple returned by build_gaussian_pyramid function
 MIN_SIZE = 16  # minimum size of an image
@@ -148,3 +149,11 @@ def pyramid_blending(im1: np.ndarray, im2: np.ndarray, mask: np.ndarray,
     l_out = [g_m[k]*l1[k] + (1 - g_m[k])*l2[k] for k in range(len(l1))]
     im_blend = laplacian_to_image(l_out, filter_vec, np.ones(len(l_out), np.float32)).clip(0, 1)
     return im_blend
+
+
+def relpath(filename):
+    """
+    get real path of file
+    """
+    return os.path.join(os.path.dirname(__file__), filename)
+
