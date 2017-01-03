@@ -95,8 +95,7 @@ def laplacian_to_image(lpyr: list, filter_vec: np.ndarray, coeff: np.ndarray) ->
     """
     im = lpyr[-1] * coeff[-1]
     for i in range(len(lpyr)-1, 0, -1):
-        im = expend(im, filter_vec)
-        im += lpyr[i-1] * coeff[i-1]
+        im = expend(im, filter_vec) + lpyr[i-1] * coeff[i-1]
     return im
 
 
