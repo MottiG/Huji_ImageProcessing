@@ -1,0 +1,5 @@
+As we learn in class, laplacian pyramids can use as a band-pass-filter.
+By multiplying each level with some coefficient, we actually applying the BPF.
+For example, multiplying the smallest level by 0 will filter the low frequencies, 
+in another words - LPF. multiplying the biggest one by zero will give us HPF. and any
+other level and coefficients combining a BPF. 

@@ -18,22 +18,8 @@ def read_image(filename: str, representation: int) -> np.ndarray:
     return im.astype(np.float32) / MAX_PIX_VAL
     # # # # # # # # # # # # # # # # # # # # END OF COPY&PASTE FROM EX1 # # # # # # # # # # # # # # # # # # # #
 
-# from PIL import Image
-# col = Image.open("aqb.jpg")
-# gray = col.convert('L')
-# bw = gray.point(lambda x: 0 if x<20 else 255, '1')
-# bw.save("mask1.jpg")
 
+plt.imshow(blending_example1()[3], cmap=plt.cm.gray)
+plt.imshow(blending_example2()[3], cmap=plt.cm.gray)
+plt.show()
 
-
-# im = read_image("im2.png", 1)
-# pyr, ker = build_gaussian_pyramid(im, 20, 3)
-# display_pyramid(pyr, 7)
-#
-blending_example2()
-
-
-
-# newIm = laplacian_to_image(pyr, ker, [0.0005,0.0005,0.0005,0.0000005,0.00000000005,0.0005,0.0005])
-# plt.imshow(newIm, cmap=plt.cm.gray)
-# plt.show()

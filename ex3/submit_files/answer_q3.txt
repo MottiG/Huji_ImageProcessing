@@ -1,0 +1,6 @@
+Here again, as we geting higher and higher in the pyramid, we get better
+images. Once again, since the levels are BPF, the lowest level will give
+us very bright image with poor blending, since we still have most of the 
+details of each image. 
+when we get to the next levels more and more tiny details are desapire 
+due to the LPF, and we get better blending.

@@ -1,0 +1,6 @@
+Here is another frequencies filtering. For too small window we let all the details remain in
+both images, which cause us to see all the edges as we let the high frequencies stay, so the
+blending is of course not good enough.
+For too big window, on the other hand, we creating a strict low pass filter, which will also
+cause us to get only very blur details, like the average of the images.
+A normal size window will give us the correct implementation and blending.
