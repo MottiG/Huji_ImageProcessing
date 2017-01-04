@@ -2,12 +2,51 @@ import numpy as np
 from scipy import signal as sp_signal
 from scipy.ndimage import filters
 from scipy.misc import imread
+from skimage.color import rgb2gray
 import matplotlib.pyplot as plt
 import os
 
+GREYSCALE, COLOR, RGBDIM = 1, 2, 3
+MAX_PIX_VAL = 255
 PYR_IDX = 0  # the index of pyr in the tuple returned by build_gaussian_pyramid function
 MIN_SIZE = 16  # minimum size of an image
 SAMPLE_FACTOR = 2  # determine down/up sampling frequency - e.g. when reducing image take one of each 2 pixels
+
+
+
+def is_valid_args(filename: str, representation: int) -> bool:
+    """
+    Basic checks on the functions input
+    """
+    return (filename is not None) and \
+           (representation == 1 or representation == 2) and \
+           isinstance(filename, str)
+
+
+def read_image(filename: str, representation: int) -> np.ndarray:
+    """
+    Reads a given image file and converts it into a given representation
+    :param filename: string containing the image filename to read.
+    :param representation: representation code, either 1 or 2 defining if the output should be either a
+    greyscale image (1) or an RGB image (2)
+    :return: Image represented by a matrix of class np.float32, normalized to the range [0, 1].
+    """
+
+    if not is_valid_args(filename, representation):
+        raise Exception("Please provide valid filename and representation code")
+
+    try:
+        im = imread(filename)
+    except OSError:
+        raise Exception("Filename should be valid image filename")
+
+    if im.ndim == RGBDIM and (representation == GREYSCALE):  # change rgb to greyscale
+        return rgb2gray(im).astype(np.float32)
+
+    elif im.ndim != RGBDIM and (representation == COLOR):
+        raise Exception("Converting greyscale to RGB is not supported")
+
+    return im.astype(np.float32) / MAX_PIX_VAL
 
 
 def gaussian_kernel(size: int) -> np.ndarray:
@@ -151,9 +190,61 @@ def pyramid_blending(im1: np.ndarray, im2: np.ndarray, mask: np.ndarray,
     return im_blend
 
 
-def relpath(filename):
+def get_blending_images(im1_path: str, im2_path: str, mask_path: str) -> tuple:
     """
-    get real path of file
+    helper function for examples functions - prepare and return all needed images
+    :param im1_path: path of im1 to blend
+    :param im2_path: path of im2 to blend
+    :param mask_path: path of mask
+    :return: im1, im2, mask (bool array), blended_template (the template for the blended image)
     """
-    return os.path.join(os.path.dirname(__file__), filename)
+    dir_path = os.path.dirname(__file__)
+    im1 = read_image(os.path.join(dir_path, im1_path), 2)
+    im2 = read_image(os.path.join(dir_path, im2_path), 2)
+    mask = read_image(os.path.join(dir_path, mask_path), 1)
+    mask[mask <= 0.1] = 0
+    mask[mask > 0.1] = 1
+    mask = mask.astype(np.bool)
+    blended_template = np.zeros(im1.shape, np.float32)
+    return im1, im2, mask, blended_template
 
+
+def display_example(im1: np.ndarray, im2: np.ndarray, mask: np.ndarray, blended: np.ndarray,) -> None:
+    """
+    helper function to display the examples
+    """
+    f = plt.figure()
+    f.add_subplot('221', title='im1')
+    plt.imshow(im1, cmap=plt.cm.gray)
+    f.add_subplot('222', title='im2')
+    plt.imshow(im2, cmap=plt.cm.gray)
+    f.add_subplot('223', title='mask')
+    plt.imshow(mask, cmap=plt.cm.gray)
+    f.add_subplot('224', title='blended')
+    plt.imshow(blended, cmap=plt.cm.gray)
+    plt.show()
+
+
+def blending_example1():
+    """
+    blend image using pyramid_blending
+    :return: the blended image
+    """
+    im1, im2, mask, blended = get_blending_images('c.jpg', 'aq.jpg', 'mask_aq.jpg')
+
+    for clr_idx in range(RGBDIM):
+        blended[:, :, clr_idx] = pyramid_blending(im1[:, :, clr_idx], im2[:, :, clr_idx], mask, 7, 11, 7)
+
+    display_example(im1, im2, mask, blended)
+
+def blending_example2():
+    """
+    blend image using pyramid_blending
+    :return: the blended image
+    """
+    im1, im2, mask, blended = get_blending_images('r2.jpg', 't2.jpg', 'tm.jpg')
+
+    for clr_idx in range(RGBDIM):
+        blended[:, :, clr_idx] = pyramid_blending(im1[:, :, clr_idx], im2[:, :, clr_idx], mask, 50, 33, 33)
+
+    display_example(im1, im2, mask, blended)
