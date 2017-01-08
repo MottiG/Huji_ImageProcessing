@@ -4,7 +4,8 @@ from sol4_add import *
 DER_FILTER = np.array([1, 0, -1], np.float32).reshape(1, 3)
 BLUR_SIZE = 3
 K = 0.04
-N = M = 7  # defaults for spread_out_corners n and m
+N = M = 4  # defaults for spread_out_corners n and m
+
 
 def harris_corner_detector(im: np.ndarray) -> np.ndarray:
     """
@@ -20,4 +21,8 @@ def harris_corner_detector(im: np.ndarray) -> np.ndarray:
     r = ix_2 * iy_2 - ix_iy**2 - K*(ix_2 + iy_2)**2  # R - the response of the
     max_of_r = non_maximum_suppression(r)
     pos = np.transpose(np.nonzero(max_of_r))  # array of the indices of non-zero pixels in max_of_r
-    return pos
+    pos_for_spread = np.transpose(np.array([pos[:, 1], pos[:, 0]]))  # school function works with [yx]
+    return pos_for_spread
+
+
+
