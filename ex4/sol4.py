@@ -1,5 +1,6 @@
 from sol4_utils import *
 from sol4_add import *
+from scipy.ndimage import interpolation
 
 DER_FILTER = np.array([1, 0, -1], np.float32).reshape(1, 3)
 BLUR_SIZE = 3
@@ -24,5 +25,10 @@ def harris_corner_detector(im: np.ndarray) -> np.ndarray:
     pos_for_spread = np.transpose(np.array([pos[:, 1], pos[:, 0]]))  # school function works with [yx]
     return pos_for_spread
 
+
+def sample_descriptor(im: np.ndarray, pos: np.ndarray, desc_rad: int) -> np.ndarray:
+    n = pos.shape[0]
+    desc = np.zeros((1+2*desc_rad, 1+2*desc_rad, n), np.float32)
+    # for i in range(n):
 
 
