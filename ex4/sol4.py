@@ -40,20 +40,20 @@ def sample_descriptor(im: np.ndarray, pos: np.ndarray, desc_rad: int) -> np.ndar
     desc = np.empty((1 + 2*desc_rad, 1 + 2*desc_rad, n), np.float32)
     for i in range(n):
         grid = np.mgrid[pos[i, 0] - desc_rad: pos[i, 0] + desc_rad + 1,
-                        pos[i, 1] - desc_rad: pos[i, 1] + desc_rad + 1]
-        desc_win = interpolation.map_coordinates(im, grid, order=1, prefilter=False)
+                        pos[i, 1] - desc_rad: pos[i, 1] + desc_rad + 1] # get the grid of indices
+        desc_win = interpolation.map_coordinates(im, grid, order=1, prefilter=False) # get the actual window
         win_mean = np.mean(desc_win)
         win_std = np.linalg.norm(desc_win - win_mean)
         if win_std:
             desc_win = (desc_win - win_mean) / win_std
-        else:
+        else:  # if the win is const, then the std will be zero
             desc_win[:] = 0
         desc[:, :, i] = desc_win
 
     return desc
 
 
-def find_features(pyr: list) -> np.ndarray:
+def find_features(pyr: list) -> tuple:
     """
     get simplified version of the MOPS descriptors from the given pyramid and the positions of them
     :param pyr: Gaussian pyramid of a grayscale image having 3 levels
@@ -62,6 +62,25 @@ def find_features(pyr: list) -> np.ndarray:
     pos = spread_out_corners(pyr[0], N, M, RADIUS)
     desc = sample_descriptor(pyr[2], pos/4, DEFAULT_DESC_RAD)
     return pos, desc
+
+
+def match_features(desc1: np.ndarray, desc2: np.ndarray, min_score: float):
+    """
+    get the indices of matching descriptors between tow arrays of descriptors (desc1 and desc2)
+    :param desc1: A feature descriptor array with shape(1+2*desc_rad,1+2*desc_rad,N1).
+    :param desc2: A feature descriptor array with shape(1+2*desc_rad,1+2*desc_rad,N2).
+    :param min_score: min score between two descriptors required to be regarded as corresponding points.
+    :return: 2 arrays with shape (M,) and dtype int, of matching indices in the given descs (each for one)
+    """
+    # reshape so we can do dot product
+    desc1 = desc1.reshape(desc1.shape[0]**2, desc1.shape[2])
+    desc2 = desc2.reshape(desc2.shape[0]**2, desc2.shape[2])
+    sjk = desc1.T.dot(desc2)
+    idxs_of_sorted_rows = np.argsort(sjk, 1)  # get idxs of sjk sorted by rows
+    idxs_of_sorted_cols = np.argsort(sjk, 0)  # get idxs of sjk sorted by cols
+
+
+
 
 
 
