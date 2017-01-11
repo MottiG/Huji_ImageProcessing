@@ -28,7 +28,10 @@ def harris_corner_detector(im: np.ndarray) -> np.ndarray:
 
 def sample_descriptor(im: np.ndarray, pos: np.ndarray, desc_rad: int) -> np.ndarray:
     n = pos.shape[0]
-    desc = np.zeros((1+2*desc_rad, 1+2*desc_rad, n), np.float32)
-    # for i in range(n):
+    desc = np.zeros((1 + 2 * desc_rad, 1 + 2 * desc_rad, n), np.float32)
+    for i in range(n):
+        grid = np.mgrid[pos[i, 0] - desc_rad: pos[i, 0] + desc_rad + 1,
+               pos[i, 1] - desc_rad: pos[i, 1] + desc_rad + 1]
+        win = interpolation.map_coordinates(im, grid, order=1, prefilter=False)
 
 
