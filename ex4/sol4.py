@@ -40,8 +40,8 @@ def sample_descriptor(im: np.ndarray, pos: np.ndarray, desc_rad: int) -> np.ndar
     desc = np.empty((1 + 2*desc_rad, 1 + 2*desc_rad, n), np.float32)
     for i in range(n):
         grid = np.mgrid[pos[i, 0] - desc_rad: pos[i, 0] + desc_rad + 1,
-                        pos[i, 1] - desc_rad: pos[i, 1] + desc_rad + 1] # get the grid of indices
-        desc_win = interpolation.map_coordinates(im, grid, order=1, prefilter=False) # get the actual window
+                        pos[i, 1] - desc_rad: pos[i, 1] + desc_rad + 1]  # get the grid of indices
+        desc_win = interpolation.map_coordinates(im, grid, order=1, prefilter=False)  # get the actual window
         win_mean = np.mean(desc_win)
         win_std = np.linalg.norm(desc_win - win_mean)
         if win_std:
@@ -76,8 +76,27 @@ def match_features(desc1: np.ndarray, desc2: np.ndarray, min_score: float):
     desc1 = desc1.reshape(desc1.shape[0]**2, desc1.shape[2])
     desc2 = desc2.reshape(desc2.shape[0]**2, desc2.shape[2])
     sjk = desc1.T.dot(desc2)
-    idxs_of_sorted_rows = np.argsort(sjk, 1)  # get idxs of sjk sorted by rows
-    idxs_of_sorted_cols = np.argsort(sjk, 0)  # get idxs of sjk sorted by cols
+    sjk[sjk < min_score] = 0  # apply nin_score condition
+
+    idx_of_desc1_max = np.argpartition(sjk, -2, 1)[:, -2:]
+    idx_of_desc2_max = np.argpartition(sjk, -2, 0)[-2:, :].T
+
+    desc1_ind = np.zeros((desc1.shape[1], desc2.shape[1]))
+    for i in range(idx_of_desc1_max.shape[0]):
+        desc1_ind[i, idx_of_desc1_max[i, :]] = 1
+
+    desc2_ind = np.zeros((desc2.shape[1], desc1.shape[1]))
+    for j in range(idx_of_desc2_max.shape[0]):
+        desc2_ind[j, idx_of_desc2_max[j, :]] = 1
+
+    # only if both desc1 and desc2 agree on descriptor, it will remain 1
+    match_ind1, match_ind2 = np.where(desc1_ind * desc2_ind.T == 1)
+
+    return match_ind1, match_ind2
+
+
+
+
 
 
 
