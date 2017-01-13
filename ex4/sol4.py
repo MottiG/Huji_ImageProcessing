@@ -1,5 +1,6 @@
 from sol4_utils import *
 from sol4_add import *
+from itertools import accumulate
 import matplotlib.pyplot as plt
 from scipy.ndimage import interpolation
 
@@ -107,7 +108,7 @@ def apply_homography(pos1: np.ndarray, H12: np.ndarray) -> np.ndarray:
     pos1 = np.hstack((pos1, np.ones((pos1.shape[0], 1))))  # add homographic element
     trans = pos1.dot(H12.T)
     pos2 = trans[:, [0, 1]] / trans[:, 2].reshape(trans.shape[0], 1)  # normalize back to x,y
-    return pos2
+    return pos2  # TODO check div by 0
 
 
 def ransac_homography(pos1: np.ndarray, pos2: np.ndarray, num_iters: int, inlier_tol: np.float32) -> tuple:
@@ -157,5 +158,25 @@ def display_matches(im1, im2, pos1, pos2, inliers) -> None:
         plt.plot([pos1[i, 0], pos2[i, 0]], [pos1[i, 1], pos2[i, 1]], mfc='r', c=color, lw=1, ms=5, marker='.')
     plt.show()
 
+
+def accumulate_homographies(H_successive: list, m: int) -> list:
+    """
+    get Hi,m from {Hi,i+1 : i = 0..M-1}.
+    :param H_successive: A list of 3x3 homography matrices where H successive[i] is a homography
+    that transforms points from coordinate system i to coordinate system i+1.
+    :param m: Index of the coordinate system we would like to accumulate the given homographies towards.
+    :return: A list of M 3x3 homography matrices, where H2m[i] transforms points from coordinate system i
+    to coordinate system m.
+    """
+    if m:
+        plus_list = H_successive[:m][::-1]  # we want to accumulate from m to 0
+        plus_list = [accumulate(plus_list, np.dot)][::-1]  # reverse again to 0-m
+        plus_list.append(np.eye(3))
+        minus_list = [map(np.linalg.inv, H_successive[m:])]
+        minus_list = [accumulate(minus_list, np.dot)]
+        H2m = np.array(plus_list+minus_list).T
+        H2m /= H2m[:, 2, 2]
+        return list(H2m.T)
+    return [np.eye(3), np.linalg.inv(H_successive[0])]
 
 
