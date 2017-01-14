@@ -2,7 +2,7 @@ from sol4_utils import *
 from sol4_add import *
 from itertools import accumulate
 import matplotlib.pyplot as plt
-from scipy.ndimage import interpolation
+from scipy.ndimage.interpolation import map_coordinates
 
 DER_FILTER = np.array([1, 0, -1], np.float32).reshape(1, 3)
 BLUR_SIZE = 3
@@ -12,6 +12,8 @@ RADIUS = 3
 DEFAULT_DESC_RAD = 3
 DEFAULT_MIN_SCORE = 0.5
 NUM_OF_POINTS = 4
+ALMOST_ZERO = 10**-5
+OVERLAP = 5
 
 
 def harris_corner_detector(im: np.ndarray) -> np.ndarray:
@@ -46,7 +48,7 @@ def sample_descriptor(im: np.ndarray, pos: np.ndarray, desc_rad: int) -> np.ndar
     for i in range(n):
         grid = np.meshgrid(np.arange(pos[i, 1] - desc_rad, pos[i, 1] + desc_rad + 1),
                            np.arange(pos[i, 0] - desc_rad, pos[i, 0] + desc_rad + 1))
-        desc_win = interpolation.map_coordinates(im, grid, order=1, prefilter=False)
+        desc_win = map_coordinates(im, grid, order=1, prefilter=False)
         desc_win -= np.mean(desc_win)
         win_std = np.linalg.norm(desc_win)
         if win_std:
@@ -106,9 +108,10 @@ def apply_homography(pos1: np.ndarray, H12: np.ndarray) -> np.ndarray:
     obtained from transforming pos1 using H12.
     """
     pos1 = np.hstack((pos1, np.ones((pos1.shape[0], 1))))  # add homographic element
-    trans = pos1.dot(H12.T)
+    trans = pos1.dot(H12.T).astype(np.float32)  # its is more efficient to transpose H12 and not pos1
+    trans[:, 2][trans[:, 2] == 0.0] = ALMOST_ZERO  # prevent divide by zero  # TODO check if ok
     pos2 = trans[:, [0, 1]] / trans[:, 2].reshape(trans.shape[0], 1)  # normalize back to x,y
-    return pos2  # TODO check div by 0
+    return pos2
 
 
 def ransac_homography(pos1: np.ndarray, pos2: np.ndarray, num_iters: int, inlier_tol: np.float32) -> tuple:
@@ -122,7 +125,6 @@ def ransac_homography(pos1: np.ndarray, pos2: np.ndarray, num_iters: int, inlier
     of inliers, containing the indices in pos1/pos2 of the maximal set of inlier matches found.
     """
     inliers = np.array([])
-
     for i in range(num_iters):
         rand_idx = np.random.choice(pos1.shape[0], size=NUM_OF_POINTS)
         pos1_smpl, pos2_smpl = pos1[rand_idx, :], pos2[rand_idx, :]
@@ -168,15 +170,77 @@ def accumulate_homographies(H_successive: list, m: int) -> list:
     :return: A list of M 3x3 homography matrices, where H2m[i] transforms points from coordinate system i
     to coordinate system m.
     """
-    if m:
-        plus_list = H_successive[:m][::-1]  # we want to accumulate from m to 0
-        plus_list = [accumulate(plus_list, np.dot)][::-1]  # reverse again to 0-m
-        plus_list.append(np.eye(3))
-        minus_list = [map(np.linalg.inv, H_successive[m:])]
-        minus_list = [accumulate(minus_list, np.dot)]
-        H2m = np.array(plus_list+minus_list).T
-        H2m /= H2m[:, 2, 2]
-        return list(H2m.T)
-    return [np.eye(3), np.linalg.inv(H_successive[0])]
+    plus_list = H_successive[:m][::-1]  # we want to accumulate from m to 0
+    plus_list = list(accumulate(plus_list, np.dot))[::-1]  # reverse again to 0-m
+    plus_list.append(np.eye(3))
+    minus_list = list(map(np.linalg.inv, H_successive[m:]))
+    minus_list = list(accumulate(minus_list, np.dot))
+    H2m = np.array(plus_list+minus_list)
+    H2m = H2m.T / H2m[:, 2, 2]
+    return list(H2m.T)
 
 
+def get_centers_and_corners(ims: list, Hs: list) -> tuple:
+    """
+    get the corners and centers of each im in ims
+    :param ims: list of grayscale images.
+    :param Hs: list of 3x3 homography matrices.
+    :return: tuple containing the centers and list with x_min,x_max,y_min and y_max
+    """
+    centers = np.empty((len(ims), 2))
+    corners = np.empty((4, len(ims)))
+    for i in range(len(ims)):
+        y_cor, x_cor = ims[i].shape[0] - 1, ims[i].shape[1] - 1
+        curr_center = np.array([x_cor/2, y_cor/2]).reshape(1, 2)
+        centers[i, :] = apply_homography(curr_center, Hs[i])[:]
+        curr_cor = np.array([[0, 0], [x_cor, 0], [0, y_cor], [x_cor, y_cor]]).reshape(4, 2)
+        curr_cor = apply_homography(curr_cor, Hs[i])
+        corners[0, i] = np.min(curr_cor[:, 0])  # curr_x_min
+        corners[1, i] = np.max(curr_cor[:, 0])  # curr_x_max
+        corners[2, i] = np.min(curr_cor[:, 1])  # curr_y_min
+        corners[3, i] = np.max(curr_cor[:, 1])  # curr_y_max
+
+    return centers, corners
+
+
+def render_panorama(ims: list, Hs: list) -> np.ndarray:
+    """
+    panorama rendering
+    :param ims: list of grayscale images.
+    :param Hs: list of 3x3 homography matrices. Hs[i] is a homography that transforms points from the
+    coordinate system of ims [i] to the coordinate system of the panorama.
+    :return: A grayscale panorama image composed of vertical strips, backwarped using homographies from Hs,
+    one from every image in ims.
+    """
+    if len(ims) == 1:
+        return ims[0]
+
+    # create canvas
+    centers, corners = get_centers_and_corners(ims, Hs)
+    x_min, x_max = np.min(corners[0, :]), np.max(corners[1, :])
+    y_min, y_max = np.min(corners[2, :]), np.max(corners[3, :])
+    x_pano, y_pano = np.meshgrid(np.arange(x_min, x_max+1), np.arange(y_min, y_max+1))
+    canvas_rows, canvas_cols = x_pano.shape
+    canvas = np.zeros((canvas_rows, canvas_cols))
+
+    # create borders of strips
+    borders = [int(np.round((centers[i, 0] + centers[i+1, 0])/2) - x_min) for i in range(len(ims)-1)]
+    borders.insert(0, 0)
+    borders.append(canvas_cols)
+    # apply panorama
+    for i in range(len(ims)):
+        left = borders[i] - OVERLAP if i != 0 else borders[i]
+        right = borders[i+1] + OVERLAP if i != len(ims)-1 else borders[i+1]
+        x, y = x_pano[:, left:right], y_pano[:, left:right]  # get the indices of the canvas
+
+        indices = np.array([x.flatten(), y.flatten()]).T
+        indices = apply_homography(indices, np.linalg.inv(Hs[i]))
+        curr_im = map_coordinates(ims[i], [indices[:, 1], indices[:, 0]], order=1, prefilter=False)
+        canvas[:, left:right] = curr_im.reshape(canvas[:, left:right].shape)
+
+    return canvas
+
+
+
+
+#
