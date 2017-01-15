@@ -11,9 +11,9 @@ N = M = 4  # defaults for spread_out_corners n and m
 RADIUS = 3
 DEFAULT_DESC_RAD = 3
 DEFAULT_MIN_SCORE = 0.5
-NUM_OF_POINTS = 4
-ALMOST_ZERO = 10**-5
-OVERLAP = 5
+NUM_OF_POINTS_TO_TRANS = 4
+EPSILON = 10 ** -5
+OVERLAP = 15
 
 
 def harris_corner_detector(im: np.ndarray) -> np.ndarray:
@@ -42,7 +42,7 @@ def sample_descriptor(im: np.ndarray, pos: np.ndarray, desc_rad: int) -> np.ndar
     :param desc_rad: "Radius" of descriptors to compute
     :return: A 3D array with shape (K,K,N) containing the ith descriptor at desc[:,:,i]
     """
-    k = 1 + 2*desc_rad
+    k = 1+2*desc_rad
     n = pos.shape[0]
     desc = np.empty((k, k, n), np.float32)
     for i in range(n):
@@ -54,7 +54,6 @@ def sample_descriptor(im: np.ndarray, pos: np.ndarray, desc_rad: int) -> np.ndar
         if win_std:
             desc_win /= win_std
             desc[:, :, i] = desc_win
-
     return desc
 
 
@@ -69,6 +68,19 @@ def find_features(pyr: list) -> tuple:
     return pos, desc
 
 
+def get_binary_mat(idx_of_max: np.ndarray, shape: tuple) -> np.ndarray:
+    """
+    get binary matrix with once where the indices of descriptors are with max value
+    :param idx_of_max: matrix with the indices of max values
+    :param shape: the shape of the desire matrix
+    :return: a binary matrix with once where the indices of descriptors are with max value
+    """
+    binary_mat = np.zeros(shape)
+    for i in range(idx_of_max.shape[0]):
+        binary_mat[i, idx_of_max[i, :]] = 1
+    return binary_mat
+
+
 def match_features(desc1: np.ndarray, desc2: np.ndarray, min_score: float) -> tuple:
     """
     get the indices of matching descriptors between tow arrays of descriptors (desc1 and desc2)
@@ -77,7 +89,7 @@ def match_features(desc1: np.ndarray, desc2: np.ndarray, min_score: float) -> tu
     :param min_score: min score between two descriptors required to be regarded as corresponding points.
     :return: 2 arrays with shape (M,) and dtype int, of matching indices in the given descs (each for one)
     """
-    # reshape so we can do dot product
+    # reshape so every column is a single flatten descriptor
     desc1 = desc1.reshape(desc1.shape[0]**2, desc1.shape[2])
     desc2 = desc2.reshape(desc2.shape[0]**2, desc2.shape[2])
     sjk = desc1.T.dot(desc2)
@@ -86,13 +98,9 @@ def match_features(desc1: np.ndarray, desc2: np.ndarray, min_score: float) -> tu
     idx_of_desc1_max = np.argpartition(sjk, -2, 1)[:, -2:]
     idx_of_desc2_max = np.argpartition(sjk, -2, 0)[-2:, :].T
 
-    desc1_ind = np.zeros((desc1.shape[1], desc2.shape[1]))
-    for i in range(idx_of_desc1_max.shape[0]):
-        desc1_ind[i, idx_of_desc1_max[i, :]] = 1
-
-    desc2_ind = np.zeros((desc2.shape[1], desc1.shape[1]))
-    for j in range(idx_of_desc2_max.shape[0]):
-        desc2_ind[j, idx_of_desc2_max[j, :]] = 1
+    # get binary matrices represent the indices of max descriptors
+    desc1_ind = get_binary_mat(idx_of_desc1_max, (desc1.shape[1], desc2.shape[1]))
+    desc2_ind = get_binary_mat(idx_of_desc2_max, (desc2.shape[1], desc1.shape[1]))
 
     # only if both desc1 and desc2 agree on descriptor, it will remain 1
     match_ind1, match_ind2 = np.where(desc1_ind * desc2_ind.T == 1)
@@ -109,7 +117,7 @@ def apply_homography(pos1: np.ndarray, H12: np.ndarray) -> np.ndarray:
     """
     pos1 = np.hstack((pos1, np.ones((pos1.shape[0], 1))))  # add homographic element
     trans = pos1.dot(H12.T).astype(np.float32)  # its is more efficient to transpose H12 and not pos1
-    trans[:, 2][trans[:, 2] == 0.0] = ALMOST_ZERO  # prevent divide by zero  # TODO check if ok
+    trans[:, 2][trans[:, 2] == 0.0] = EPSILON  # prevent divide by zero  # TODO check if ok
     pos2 = trans[:, [0, 1]] / trans[:, 2].reshape(trans.shape[0], 1)  # normalize back to x,y
     return pos2
 
@@ -126,19 +134,18 @@ def ransac_homography(pos1: np.ndarray, pos2: np.ndarray, num_iters: int, inlier
     """
     inliers = np.array([])
     for i in range(num_iters):
-        rand_idx = np.random.choice(pos1.shape[0], size=NUM_OF_POINTS)
+        rand_idx = np.random.choice(pos1.shape[0], size=NUM_OF_POINTS_TO_TRANS)  # choose 4 points
         pos1_smpl, pos2_smpl = pos1[rand_idx, :], pos2[rand_idx, :]
         h = least_squares_homography(pos1_smpl, pos2_smpl)
         if h is None:
             continue
-        pos2_trans = apply_homography(pos1, h)
-        e = np.linalg.norm(pos2_trans - pos2, axis=1)**2
+        pos1_trans = apply_homography(pos1, h)
+        e = np.linalg.norm(pos1_trans - pos2, axis=1)**2
         curr_inliers = np.where(e < inlier_tol)[0]  # indices of "good" points of pos2
         if len(curr_inliers) > len(inliers):
             inliers = curr_inliers
 
     H12 = least_squares_homography(pos1[inliers, :], pos2[inliers, :])
-
     return H12, inliers
 
 
@@ -170,14 +177,25 @@ def accumulate_homographies(H_successive: list, m: int) -> list:
     :return: A list of M 3x3 homography matrices, where H2m[i] transforms points from coordinate system i
     to coordinate system m.
     """
-    plus_list = H_successive[:m][::-1]  # we want to accumulate from m to 0
-    plus_list = list(accumulate(plus_list, np.dot))[::-1]  # reverse again to 0-m
-    plus_list.append(np.eye(3))
-    minus_list = list(map(np.linalg.inv, H_successive[m:]))
-    minus_list = list(accumulate(minus_list, np.dot))
-    H2m = np.array(plus_list+minus_list)
+    less_than_m = H_successive[:m]  # all matrices for i<m
+    less_than_m = list(accumulate(less_than_m[::-1], np.dot))[::-1]  # reverse again to 0-m
+    less_than_m.append(np.eye(3))  # add for i=m
+    bigger_than_m = H_successive[m:]  # all matrices for i>m
+    bigger_than_m = list(map(np.linalg.inv, bigger_than_m))
+    bigger_than_m = list(accumulate(bigger_than_m, np.dot))
+    H2m = np.array(less_than_m + bigger_than_m)
     H2m = H2m.T / H2m[:, 2, 2]
     return list(H2m.T)
+
+
+def next_power(d: int):
+    """
+    :param d: size of dimension of image
+    :return: the next power of 2 of this size
+    """
+    res = 1
+    while res < d: res <<= 1
+    return res
 
 
 def get_centers_and_corners(ims: list, Hs: list) -> tuple:
@@ -185,21 +203,29 @@ def get_centers_and_corners(ims: list, Hs: list) -> tuple:
     get the corners and centers of each im in ims
     :param ims: list of grayscale images.
     :param Hs: list of 3x3 homography matrices.
-    :return: tuple containing the centers and list with x_min,x_max,y_min and y_max
+    :return: tuple containing a list of x,y centers  and  a list with x_min,x_max,y_min and y_max
     """
-    centers = np.empty((len(ims), 2))
-    corners = np.empty((4, len(ims)))
+    centers = []
+    corners = np.empty((len(ims), 4))
     for i in range(len(ims)):
-        y_cor, x_cor = ims[i].shape[0] - 1, ims[i].shape[1] - 1
-        curr_center = np.array([x_cor/2, y_cor/2]).reshape(1, 2)
-        centers[i, :] = apply_homography(curr_center, Hs[i])[:]
-        curr_cor = np.array([[0, 0], [x_cor, 0], [0, y_cor], [x_cor, y_cor]]).reshape(4, 2)
-        curr_cor = apply_homography(curr_cor, Hs[i])
-        corners[0, i] = np.min(curr_cor[:, 0])  # curr_x_min
-        corners[1, i] = np.max(curr_cor[:, 0])  # curr_x_max
-        corners[2, i] = np.min(curr_cor[:, 1])  # curr_y_min
-        corners[3, i] = np.max(curr_cor[:, 1])  # curr_y_max
+        rows_cor, cols_cor = ims[i].shape[0] - 1, ims[i].shape[1] - 1
 
+        # get center of im[i]:
+        curr_center = np.array([cols_cor/2, rows_cor/2]).reshape(1, 2)
+        centers.append(apply_homography(curr_center, Hs[i])[0])
+
+        # get corners of im[i]:
+        curr_cornrs = np.array([[0, 0], [cols_cor, 0], [0, rows_cor], [cols_cor, rows_cor]]).reshape(4, 2)
+        curr_cornrs = apply_homography(curr_cornrs, Hs[i])
+        corners[i, 0] = np.min(curr_cornrs[:, 0])  # curr_x_min
+        corners[i, 1] = np.max(curr_cornrs[:, 0])  # curr_x_max
+        corners[i, 2] = np.min(curr_cornrs[:, 1])  # curr_y_min
+        corners[i, 3] = np.max(curr_cornrs[:, 1])  # curr_y_max
+
+    # calc canvas corners
+    x_min, x_max = np.min(corners[:, 0]), np.max(corners[:, 1])
+    y_min, y_max = np.min(corners[:, 2]), np.max(corners[:, 3])
+    corners = [x_min, x_max, y_min, y_max]
     return centers, corners
 
 
@@ -215,32 +241,58 @@ def render_panorama(ims: list, Hs: list) -> np.ndarray:
     if len(ims) == 1:
         return ims[0]
 
-    # create canvas
-    centers, corners = get_centers_and_corners(ims, Hs)
-    x_min, x_max = np.min(corners[0, :]), np.max(corners[1, :])
-    y_min, y_max = np.min(corners[2, :]), np.max(corners[3, :])
-    x_pano, y_pano = np.meshgrid(np.arange(x_min, x_max+1), np.arange(y_min, y_max+1))
-    canvas_rows, canvas_cols = x_pano.shape
-    canvas = np.zeros((canvas_rows, canvas_cols))
+    # create the canvas of the panorama
+    centers, corners = get_centers_and_corners(ims, Hs)  # corners = [x_min, x_max, y_min, y_max]
+    x_pano, y_pano = np.meshgrid(np.arange(corners[0], corners[1]+1),
+                                 np.arange(corners[2], corners[3]+1))
+    panorama = np.zeros(x_pano.shape)  # the canvas of the panorama
+    pan_rows, pan_cols = panorama.shape
+    next_power_of_rows = next_power(pan_rows)  # will use later for padding
+    next_power_of_cols = next_power(pan_cols)
 
     # create borders of strips
-    borders = [int(np.round((centers[i, 0] + centers[i+1, 0])/2) - x_min) for i in range(len(ims)-1)]
+    borders = [int(np.round((centers[i][0] + centers[i+1][0])/2) - corners[0]) for i in range(len(ims)-1)]
     borders.insert(0, 0)
-    borders.append(canvas_cols)
+    borders.append(x_pano.shape[1])
+
     # apply panorama
     for i in range(len(ims)):
         left = borders[i] - OVERLAP if i != 0 else borders[i]
         right = borders[i+1] + OVERLAP if i != len(ims)-1 else borders[i+1]
-        x, y = x_pano[:, left:right], y_pano[:, left:right]  # get the indices of the canvas
+        x_coord, y_coord = x_pano[:, left:right], y_pano[:, left:right]  # indices of the current part
+        xi_yi = np.array([x_coord.flatten(), y_coord.flatten()]).T
+        xi_yi = apply_homography(xi_yi, np.linalg.inv(Hs[i]))
 
-        indices = np.array([x.flatten(), y.flatten()]).T
-        indices = apply_homography(indices, np.linalg.inv(Hs[i]))
-        curr_im = map_coordinates(ims[i], [indices[:, 1], indices[:, 0]], order=1, prefilter=False)
-        canvas[:, left:right] = curr_im.reshape(canvas[:, left:right].shape)
+        curr_im = map_coordinates(ims[i], [xi_yi[:, 1], xi_yi[:, 0]], order=1, prefilter=False)
+        curr_im = curr_im.reshape(panorama[:, left:right].shape)
+        # panorama[:, left:right] = curr_im  # TODO dell after implementing blending
 
-    return canvas
+        # apply blending on panorama:
+        if i == 0:
+            panorama[:, left:right] = curr_im
+            continue
+        temp_canvas = np.zeros(panorama.shape)
+        temp_canvas[:, left:right] = curr_im
 
+        # pad temp canvas:
+        if next_power_of_rows > pan_rows:  # from top
+            temp_canvas = np.vstack((np.zeros((next_power_of_rows-pan_rows, temp_canvas.shape[1])),
+                                    temp_canvas))
+            panorama = np.vstack((np.zeros((next_power_of_rows-pan_rows, panorama.shape[1])), panorama))
+        if next_power_of_cols > pan_cols: # from right side
+            temp_canvas = np.hstack((temp_canvas,
+                                     np.zeros((temp_canvas.shape[0], next_power_of_cols-pan_cols))))
+            panorama = np.hstack((panorama, np.zeros((panorama.shape[0], next_power_of_cols-pan_cols))))
 
+        # create mask:
+        mask = np.ones(panorama.shape)
+        mask[:, borders[i]:borders[i+1]] = 0
+        panorama = pyramid_blending(panorama, temp_canvas, mask, 3, 7, 7)
 
+        # plt.imshow(panorama.clip(0, 1), cmap=plt.cm.gray) #TODO dell
+        # plt.show() #TODO dell
 
-#
+        panorama = panorama[0:pan_rows, 0:pan_cols]
+
+    return panorama
+
