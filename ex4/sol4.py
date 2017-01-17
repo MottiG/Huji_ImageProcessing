@@ -13,7 +13,7 @@ DEFAULT_DESC_RAD = 3
 DEFAULT_MIN_SCORE = 0.5
 NUM_OF_POINTS_TO_TRANS = 4
 EPSILON = 10 ** -5
-OVERLAP = 15
+OVERLAP = 20
 
 
 def harris_corner_detector(im: np.ndarray) -> np.ndarray:
@@ -117,8 +117,8 @@ def apply_homography(pos1: np.ndarray, H12: np.ndarray) -> np.ndarray:
     """
     pos1 = np.hstack((pos1, np.ones((pos1.shape[0], 1))))  # add homographic element
     trans = pos1.dot(H12.T).astype(np.float32)  # its is more efficient to transpose H12 and not pos1
-    trans[:, 2][trans[:, 2] == 0.0] = EPSILON  # prevent divide by zero  # TODO check if ok
-    pos2 = trans[:, [0, 1]] / trans[:, 2].reshape(trans.shape[0], 1)  # normalize back to x,y
+    trans /= trans[:, 2].reshape(trans.shape[0], 1)
+    pos2 = trans[:, [0, 1]]   # normalize back to x,y
     return pos2
 
 
@@ -223,8 +223,8 @@ def get_centers_and_corners(ims: list, Hs: list) -> tuple:
         corners[i, 3] = np.max(curr_cornrs[:, 1])  # curr_y_max
 
     # calc canvas corners
-    x_min, x_max = np.min(corners[:, 0]), np.max(corners[:, 1])
-    y_min, y_max = np.min(corners[:, 2]), np.max(corners[:, 3])
+    x_min, x_max = int(np.min(corners[:, 0])), int(np.max(corners[:, 1]))
+    y_min, y_max = int(np.min(corners[:, 2])), int(np.max(corners[:, 3]))
     corners = [x_min, x_max, y_min, y_max]
     return centers, corners
 
@@ -243,15 +243,19 @@ def render_panorama(ims: list, Hs: list) -> np.ndarray:
 
     # create the canvas of the panorama
     centers, corners = get_centers_and_corners(ims, Hs)  # corners = [x_min, x_max, y_min, y_max]
-    x_pano, y_pano = np.meshgrid(np.arange(corners[0], corners[1]+1),
-                                 np.arange(corners[2], corners[3]+1))
+    x_min, x_max, y_min, y_max = corners[0], corners[1], corners[2], corners[3]
+    next_power_of_rows = next_power(y_max - y_min + 1)
+    next_power_of_cols = next_power(x_max - x_min + 1)
+    rows_pad = next_power_of_rows - (y_max - y_min + 1)
+    cols_pad = next_power_of_cols - (x_max - x_min + 1)
+    x_pano, y_pano = np.meshgrid(np.arange(x_min, x_max+cols_pad+1),
+                                 np.arange(y_min, y_max+rows_pad+1))
     panorama = np.zeros(x_pano.shape)  # the canvas of the panorama
     pan_rows, pan_cols = panorama.shape
-    next_power_of_rows = next_power(pan_rows)  # will use later for padding
-    next_power_of_cols = next_power(pan_cols)
+
 
     # create borders of strips
-    borders = [int(np.round((centers[i][0] + centers[i+1][0])/2) - corners[0]) for i in range(len(ims)-1)]
+    borders = [int(np.round((centers[i][0] + centers[i+1][0])/2) - x_min) for i in range(len(ims)-1)]
     borders.insert(0, 0)
     borders.append(x_pano.shape[1])
 
@@ -275,24 +279,34 @@ def render_panorama(ims: list, Hs: list) -> np.ndarray:
         temp_canvas[:, left:right] = curr_im
 
         # pad temp canvas:
-        if next_power_of_rows > pan_rows:  # from top
-            temp_canvas = np.vstack((np.zeros((next_power_of_rows-pan_rows, temp_canvas.shape[1])),
-                                    temp_canvas))
-            panorama = np.vstack((np.zeros((next_power_of_rows-pan_rows, panorama.shape[1])), panorama))
-        if next_power_of_cols > pan_cols: # from right side
-            temp_canvas = np.hstack((temp_canvas,
-                                     np.zeros((temp_canvas.shape[0], next_power_of_cols-pan_cols))))
-            panorama = np.hstack((panorama, np.zeros((panorama.shape[0], next_power_of_cols-pan_cols))))
+        # if next_power_of_rows > pan_rows:  # from top
+        #     temp_canvas = np.hstack((temp_canvas,
+        #                          np.zeros((temp_canvas.shape[0], next_power_of_rows-pan_rows))))
+        #     panorama = np.hstack((panorama, np.zeros((panorama.shape[0], next_power_of_rows - pan_rows))))
+        #
+        #     # temp_canvas = np.vstack((np.zeros((next_power_of_rows-pan_rows, temp_canvas.shape[1])),
+        #     #                         temp_canvas))
+        #     # panorama = np.vstack((np.zeros((next_power_of_rows-pan_rows, panorama.shape[1])), panorama))
+        # if next_power_of_cols > pan_cols: # from right side
+        #
+        #
+
+
+            # temp_canvas = np.hstack((temp_canvas,
+            #                          np.zeros((temp_canvas.shape[0], next_power_of_cols-pan_cols))))
+            # panorama = np.hstack((panorama, np.zeros((panorama.shape[0], next_power_of_cols-pan_cols))))
 
         # create mask:
         mask = np.ones(panorama.shape)
         mask[:, borders[i]:borders[i+1]] = 0
-        panorama = pyramid_blending(panorama, temp_canvas, mask, 3, 7, 7)
+        panorama = pyramid_blending(panorama, temp_canvas, mask, 3, 15, 15)
 
         # plt.imshow(panorama.clip(0, 1), cmap=plt.cm.gray) #TODO dell
         # plt.show() #TODO dell
 
-        panorama = panorama[0:pan_rows, 0:pan_cols]
+        panorama = panorama[:pan_rows, :pan_cols]
+
+    panorama = panorama[:y_max-y_min+1, :x_max-x_min+1]
 
     return panorama
 
