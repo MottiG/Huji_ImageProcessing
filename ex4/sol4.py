@@ -13,7 +13,7 @@ DEFAULT_DESC_RAD = 3
 DEFAULT_MIN_SCORE = 0.5
 NUM_OF_POINTS_TO_TRANS = 4
 EPSILON = 10 ** -5
-OVERLAP = 20
+OVERLAP = 30
 
 
 def harris_corner_detector(im: np.ndarray) -> np.ndarray:
@@ -241,18 +241,22 @@ def render_panorama(ims: list, Hs: list) -> np.ndarray:
     if len(ims) == 1:
         return ims[0]
 
-    # create the canvas of the panorama
+    # get data of the shape of the panorama
     centers, corners = get_centers_and_corners(ims, Hs)  # corners = [x_min, x_max, y_min, y_max]
     x_min, x_max, y_min, y_max = corners[0], corners[1], corners[2], corners[3]
-    next_power_of_rows = next_power(y_max - y_min + 1)
-    next_power_of_cols = next_power(x_max - x_min + 1)
-    rows_pad = next_power_of_rows - (y_max - y_min + 1)
-    cols_pad = next_power_of_cols - (x_max - x_min + 1)
-    x_pano, y_pano = np.meshgrid(np.arange(x_min, x_max+cols_pad+1),
-                                 np.arange(y_min, y_max+rows_pad+1))
+    width, height = x_max - x_min + 1, y_max - y_min + 1
+
+    # calc a fake shape so it could fit the pyramid blending - only power of 2 sizes
+    next_power_of_cols = next_power(width)
+    next_power_of_rows = next_power(height)
+    cols_pad = next_power_of_cols - width
+    rows_pad = next_power_of_rows - height
+
+    # create the canvas of the panorama
+    x_pano, y_pano = np.meshgrid(np.arange(x_min, x_max + cols_pad + 1),
+                                 np.arange(y_min, y_max + rows_pad + 1))
     panorama = np.zeros(x_pano.shape)  # the canvas of the panorama
     pan_rows, pan_cols = panorama.shape
-
 
     # create borders of strips
     borders = [int(np.round((centers[i][0] + centers[i+1][0])/2) - x_min) for i in range(len(ims)-1)]
@@ -269,7 +273,6 @@ def render_panorama(ims: list, Hs: list) -> np.ndarray:
 
         curr_im = map_coordinates(ims[i], [xi_yi[:, 1], xi_yi[:, 0]], order=1, prefilter=False)
         curr_im = curr_im.reshape(panorama[:, left:right].shape)
-        # panorama[:, left:right] = curr_im  # TODO dell after implementing blending
 
         # apply blending on panorama:
         if i == 0:
@@ -278,35 +281,13 @@ def render_panorama(ims: list, Hs: list) -> np.ndarray:
         temp_canvas = np.zeros(panorama.shape)
         temp_canvas[:, left:right] = curr_im
 
-        # pad temp canvas:
-        # if next_power_of_rows > pan_rows:  # from top
-        #     temp_canvas = np.hstack((temp_canvas,
-        #                          np.zeros((temp_canvas.shape[0], next_power_of_rows-pan_rows))))
-        #     panorama = np.hstack((panorama, np.zeros((panorama.shape[0], next_power_of_rows - pan_rows))))
-        #
-        #     # temp_canvas = np.vstack((np.zeros((next_power_of_rows-pan_rows, temp_canvas.shape[1])),
-        #     #                         temp_canvas))
-        #     # panorama = np.vstack((np.zeros((next_power_of_rows-pan_rows, panorama.shape[1])), panorama))
-        # if next_power_of_cols > pan_cols: # from right side
-        #
-        #
-
-
-            # temp_canvas = np.hstack((temp_canvas,
-            #                          np.zeros((temp_canvas.shape[0], next_power_of_cols-pan_cols))))
-            # panorama = np.hstack((panorama, np.zeros((panorama.shape[0], next_power_of_cols-pan_cols))))
-
-        # create mask:
+        # create a mask and blend them:
         mask = np.ones(panorama.shape)
-        mask[:, borders[i]:borders[i+1]] = 0
-        panorama = pyramid_blending(panorama, temp_canvas, mask, 3, 15, 15)
-
-        # plt.imshow(panorama.clip(0, 1), cmap=plt.cm.gray) #TODO dell
-        # plt.show() #TODO dell
-
+        mask[:, borders[i]:] = 0
+        panorama = pyramid_blending(panorama, temp_canvas, mask, 5, 9, 9)
         panorama = panorama[:pan_rows, :pan_cols]
 
-    panorama = panorama[:y_max-y_min+1, :x_max-x_min+1]
+    panorama = panorama[:height, :width]  # back to real shape
 
     return panorama
 
