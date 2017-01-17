@@ -1,5 +1,6 @@
-from sol4_utils import *
-from sol4_add import *
+import sol4_utils
+from sol4_utils import np
+import sol4_add
 from itertools import accumulate
 import matplotlib.pyplot as plt
 from scipy.ndimage.interpolation import map_coordinates
@@ -22,13 +23,13 @@ def harris_corner_detector(im: np.ndarray) -> np.ndarray:
     :param im: the image to extract key points
     :return: An array with shape (N,2) of [x,y] key points locations in im.
     """
-    ix = sp_signal.convolve2d(im, DER_FILTER, 'same', 'wrap')
-    iy = sp_signal.convolve2d(im, DER_FILTER.T, 'same', 'wrap')
-    ix_2 = blur_spatial(ix**2, BLUR_SIZE)
-    iy_2 = blur_spatial(iy**2, BLUR_SIZE)
-    ix_iy = blur_spatial(ix * iy, BLUR_SIZE)
+    ix = sol4_utils.sp_signal.convolve2d(im, DER_FILTER, 'same', 'wrap')
+    iy = sol4_utils.sp_signal.convolve2d(im, DER_FILTER.T, 'same', 'wrap')
+    ix_2 = sol4_utils.blur_spatial(ix**2, BLUR_SIZE)
+    iy_2 = sol4_utils.blur_spatial(iy**2, BLUR_SIZE)
+    ix_iy = sol4_utils.blur_spatial(ix * iy, BLUR_SIZE)
     r = ix_2 * iy_2 - ix_iy**2 - K*(ix_2 + iy_2)**2  # R - the response of the
-    max_of_r = non_maximum_suppression(r)
+    max_of_r = sol4_add.non_maximum_suppression(r)
     pos = np.transpose(np.nonzero(max_of_r))  # array of the indices of non-zero pixels in max_of_r
     pos_for_spread = np.transpose(np.array([pos[:, 1], pos[:, 0]]))  # school function works with [yx]
     return pos_for_spread
@@ -63,7 +64,7 @@ def find_features(pyr: list) -> tuple:
     :param pyr: Gaussian pyramid of a grayscale image having 3 levels
     :return: the positions of the descriptors and array of them [with shape (1+2*desc_rad,1+2*desc_rad,N)]
     """
-    pos = spread_out_corners(pyr[0], N, M, RADIUS)
+    pos = sol4_add.spread_out_corners(pyr[0], N, M, RADIUS)
     desc = sample_descriptor(pyr[2], pos/4, DEFAULT_DESC_RAD)
     return pos, desc
 
@@ -136,7 +137,7 @@ def ransac_homography(pos1: np.ndarray, pos2: np.ndarray, num_iters: int, inlier
     for i in range(num_iters):
         rand_idx = np.random.choice(pos1.shape[0], size=NUM_OF_POINTS_TO_TRANS)  # choose 4 points
         pos1_smpl, pos2_smpl = pos1[rand_idx, :], pos2[rand_idx, :]
-        h = least_squares_homography(pos1_smpl, pos2_smpl)
+        h = sol4_add.least_squares_homography(pos1_smpl, pos2_smpl)
         if h is None:
             continue
         pos1_trans = apply_homography(pos1, h)
@@ -145,7 +146,7 @@ def ransac_homography(pos1: np.ndarray, pos2: np.ndarray, num_iters: int, inlier
         if len(curr_inliers) > len(inliers):
             inliers = curr_inliers
 
-    H12 = least_squares_homography(pos1[inliers, :], pos2[inliers, :])
+    H12 = sol4_add.least_squares_homography(pos1[inliers, :], pos2[inliers, :])
     return H12, inliers
 
 
@@ -284,10 +285,10 @@ def render_panorama(ims: list, Hs: list) -> np.ndarray:
         # create a mask and blend them:
         mask = np.ones(panorama.shape)
         mask[:, borders[i]:] = 0
-        panorama = pyramid_blending(panorama, temp_canvas, mask, 4, 15, 15)
+        panorama = sol4_utils.pyramid_blending(panorama, temp_canvas, mask, 4, 15, 15)
         panorama = panorama[:pan_rows, :pan_cols]
 
-    panorama = panorama[:height, :width]  # back to real shape
+    panorama = panorama[:height, :width].astype(np.float32)  # back to real shape
 
     return panorama
 

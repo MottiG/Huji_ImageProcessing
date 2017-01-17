@@ -47,6 +47,7 @@ def generate_panorama(data_dir, file_prefix, num_images, figsize=(20,20)):
   #plot the panorama
   plt.figure(figsize=figsize)
   plt.imshow(panorama.clip(0,1))
+  plt.imsave(os.path.join('external/', 'lib_pan.jpg'), panorama.clip(0,1))
   plt.show()
 
 def main():
