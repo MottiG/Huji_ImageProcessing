@@ -225,7 +225,7 @@ def display_example(im1: np.ndarray, im2: np.ndarray, mask: np.ndarray, blended:
     plt.show()
 
 
-def blending_example1():
+def blending_example1() -> tuple:
     """
     blend image of The Dude with image of Albert Einstein using pyramid_blending
     :return: the blended image
@@ -237,7 +237,8 @@ def blending_example1():
 
     return im1, im2, mask, im_blend
 
-def blending_example2():
+
+def blending_example2() -> tuple:
     """
     blend image of The Western Wall with image of people studying at the Aquarium, using pyramid_blending
     :return: im1, im2, mask, im_blend

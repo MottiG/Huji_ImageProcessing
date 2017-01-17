@@ -284,7 +284,7 @@ def render_panorama(ims: list, Hs: list) -> np.ndarray:
         # create a mask and blend them:
         mask = np.ones(panorama.shape)
         mask[:, borders[i]:] = 0
-        panorama = pyramid_blending(panorama, temp_canvas, mask, 5, 9, 9)
+        panorama = pyramid_blending(panorama, temp_canvas, mask, 4, 15, 15)
         panorama = panorama[:pan_rows, :pan_cols]
 
     panorama = panorama[:height, :width]  # back to real shape

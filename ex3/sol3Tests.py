@@ -18,8 +18,6 @@ def read_image(filename: str, representation: int) -> np.ndarray:
     return im.astype(np.float32) / MAX_PIX_VAL
     # # # # # # # # # # # # # # # # # # # # END OF COPY&PASTE FROM EX1 # # # # # # # # # # # # # # # # # # # #
 
-
-plt.imshow(blending_example1()[3], cmap=plt.cm.gray)
-plt.imshow(blending_example2()[3], cmap=plt.cm.gray)
-plt.show()
+blending_example1()
+blending_example2()
 
