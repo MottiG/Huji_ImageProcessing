@@ -6,7 +6,7 @@ import numpy as np
 SUBVAL = 0.5  # value to subtract from each image
 KERNEL_SIZE = 3
 NUM_OF_BLOCKS = 5  # default number of rsblocks of the network
-PRECENT_OF_VALID = 20
+PERCENT_OF_TRAIN = 0.8
 BETA_2 = 0.9  # for adam optimizer
 
 
@@ -72,10 +72,10 @@ def resblock(input_tensor: np.ndarray, num_channels: int) -> np.ndarray:
     :param num_channels: number of channels for each of the convolutional layers
     :return: symbolic output tensor of the layer conguration
     """
-    first_conv =  Convolution2D(num_channels , KERNEL_SIZE, KERNEL_SIZE, border_mode ='same')(input_tensor)
-    actv = Activation('relu')(first_conv)
-    second_conv = Convolution2D(num_channels, KERNEL_SIZE, KERNEL_SIZE, border_mode='same')(actv)
-    output_tensor = merge([input_tensor, second_conv], mode ='sum')
+    layer = Convolution2D(num_channels , KERNEL_SIZE, KERNEL_SIZE, border_mode ='same')(input_tensor)
+    layer = Activation('relu')(layer)
+    layer = Convolution2D(num_channels, KERNEL_SIZE, KERNEL_SIZE, border_mode='same')(layer)
+    output_tensor = merge([input_tensor, layer], mode ='sum')
     return output_tensor
 
 
@@ -88,13 +88,13 @@ def build_nn_model(height: int, width: int, num_channels: int) -> Model:
     :return: the network model
     """
     inpt = Input(shape=(GREYSCALE, height, width))
-    conv = Convolution2D(num_channels, KERNEL_SIZE, KERNEL_SIZE, border_mode='same')(inpt)
-    actv = Activation('relu')(conv)
-    block_inpt = actv
+    layer = Convolution2D(num_channels, KERNEL_SIZE, KERNEL_SIZE, border_mode='same')(inpt)
+    layer = Activation('relu')(layer)
+    block_inpt = layer
     for i in range(NUM_OF_BLOCKS):
         block_inpt = resblock(block_inpt, num_channels=num_channels)  # TODO check if needed another variable as "out"
-    mrg = merge([actv, block_inpt], mode ='sum')
-    last_conv = Convolution2D(1, KERNEL_SIZE, KERNEL_SIZE, border_mode='same')(mrg)
+    layer = merge([layer, block_inpt], mode ='sum')
+    last_conv = Convolution2D(1, KERNEL_SIZE, KERNEL_SIZE, border_mode='same')(layer)
     return Model(inpt, last_conv)
 
 
@@ -112,6 +112,19 @@ def train_model(model: Model, images: list, corruption_func: callable, batch_siz
     :param num_valid_samples: The number of samples in the validation set to test on after every epoch.
     :return:
     """
+    train_size = int(PERCENT_OF_TRAIN*len(images))
+    train_set = load_dataset(images[:train_size], batch_size, corruption_func, model.input_shape)
+    valid_set = load_dataset(images[train_size:], batch_size, corruption_func, model.input_shape)
+    model.compile(adam(beta_2=BETA_2), 'mean_square_loss')
+    model.fit_generator(generator=train_set, samples_per_epoch=samples_per_epoch, nb_epoch=num_epochs,
+                        validation_data=valid_set, nb_val_samples=num_valid_samples)
 
 
-
+def restore_image(corrupted_image: np.ndarray, base_model: Model, num_channels: int) -> np.ndarray:
+    """
+    restore a given  image
+    :param corrupted_image:
+    :param base_model:
+    :param num_channels:
+    :return:
+    """
