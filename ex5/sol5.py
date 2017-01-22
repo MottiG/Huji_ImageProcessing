@@ -3,9 +3,10 @@ from keras.models import Model
 from keras.optimizers import adam
 import numpy as np
 
-SUBVAL = 0.5  # value to subtract from each image
+NORM_VAL = 0.5  # value to subtract from each image
 KERNEL_SIZE = 3
 NUM_OF_BLOCKS = 5  # default number of rsblocks of the network
+LOSS_FUNC = 'mean_square_error'
 PERCENT_OF_TRAIN = 0.8
 BETA_2 = 0.9  # for adam optimizer
 
@@ -57,8 +58,8 @@ def load_dataset(filenames: list, batch_size: int, corruption_func: callable, cr
             max_patch_y, max_patch_x = im.shape[0] - crop_rows, im.shape[1] - crop_cols
             patch_y = np.random.randint(max_patch_y + 1)
             patch_x = np.random.randint(max_patch_x + 1)
-            im_patch = im[patch_y: patch_y+crop_rows, patch_x: patch_x+crop_cols] - SUBVAL
-            crop_patch = crop_im[patch_y: patch_y+crop_rows, patch_x: patch_x+crop_cols] - SUBVAL
+            im_patch = im[patch_y: patch_y+crop_rows, patch_x: patch_x+crop_cols] - NORM_VAL
+            crop_patch = crop_im[patch_y: patch_y+crop_rows, patch_x: patch_x+crop_cols] - NORM_VAL
             target_batch[i, ...] = im_patch[np.newaxis, ...]
             source_batch[i, ...] = crop_patch[np.newaxis, ...]
 
@@ -115,7 +116,7 @@ def train_model(model: Model, images: list, corruption_func: callable, batch_siz
     train_size = int(PERCENT_OF_TRAIN*len(images))
     train_set = load_dataset(images[:train_size], batch_size, corruption_func, model.input_shape)
     valid_set = load_dataset(images[train_size:], batch_size, corruption_func, model.input_shape)
-    model.compile(adam(beta_2=BETA_2), 'mean_square_loss')
+    model.compile(adam(beta_2=BETA_2), LOSS_FUNC)
     model.fit_generator(generator=train_set, samples_per_epoch=samples_per_epoch, nb_epoch=num_epochs,
                         validation_data=valid_set, nb_val_samples=num_valid_samples)
 
@@ -123,8 +124,33 @@ def train_model(model: Model, images: list, corruption_func: callable, batch_siz
 def restore_image(corrupted_image: np.ndarray, base_model: Model, num_channels: int) -> np.ndarray:
     """
     restore a given  image
-    :param corrupted_image:
-    :param base_model:
-    :param num_channels:
-    :return:
+    :param corrupted_image: grayscale image of shape (height, width) and with values in the [0, 1]
+    :param base_model: a neural network trained to restore small patches
+    :param num_channels: number of channels used in the base model
+    :return: image with values in the [−0.5, 0.5] range
     """
+    model = build_nn_model(corrupted_image.shape[0], corrupted_image.shape[1], num_channels)
+    model.set_weights(base_model.get_weights())
+    corrupted_image -= NORM_VAL # TODO check if needed here, if not, where?
+    fix_im = model.predict(corrupted_image[np.newaxis,...])[0]
+    fix_im += NORM_VAL  # TODO check if needed here, if not, where?
+    return fix_im.clip(0, 1)
+
+
+def add_gaussian_noise(image: np.ndarray, min_sigma: float, max_sigma: float) -> np.ndarray:
+    """
+    add to every pixel of the input image a zero-mean gaussian random variable with standard deviation equal to sigma
+    :param image: a grayscale image with values in the [0, 1] range of type float32.
+    :param min_sigma:  a non-negative scalar value representing the minimal variance of the gaussian distribution.
+    :param max_sigma:  a non-negative scalar value larger than or equal to min_sigma, representing the maximal
+    variance of the gaussian distribution.
+    :return: corrupted image as np.ndarray with values in the [0, 1] range of type float32
+    """
+    sigma = (max_sigma - min_sigma)*np.random.random_sample() + min_sigma
+    noise_im = np.random.normal(scale=sigma, size=image.shape)
+    image += noise_im
+    return image.clip(0, 1)
+
+
+
+
