@@ -30,16 +30,16 @@ def list_images(path, use_shuffle=True):
 
 def images_for_denoising():
     """Returns a list of image paths to be used for image denoising in Ex5"""
-    return list_images(relpath('image_dataset/train'), True)
+    return list_images(relpath('/cs/usr/mottig/Downloads/image_dataset/train'), True)
 
 def images_for_deblurring():
     """Returns a list of image paths to be used for text deblurring in Ex5"""
-    return list_images(relpath('text_dataset/train'), True)
+    return list_images(relpath('/cs/usr/mottig/Downloads/text_dataset/train'), True)
 
 # For those who wish to experiment...
 def images_for_super_resolution():
     """Returns a list of image paths to be used for image super-resolution in Ex5"""
-    return list_images(relpath('image_dataset/train'), True)
+    return list_images(relpath('/cs/usr/mottig/Downloads/image_dataset/train'), True)
 
 def motion_blur_kernel(kernel_size, angle):
     """Returns a 2D image kernel for motion blur effect.
