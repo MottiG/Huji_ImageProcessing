@@ -43,7 +43,6 @@ DENOIS_TEST_VALID_SIZE = 30
 # deblurring parameters:
 DEBLUR_PATCH_SIZE = 16
 DEBLUR_CHANNELS = 32
-DEBLUR_KERNEL_SIZE = 7
 DEBLUR_BATCH_SIZE = 100
 DEBLUR_TEST_BATCH_SIZE = 10
 DEBLUR_EPOCH_SIZE = 10000
@@ -52,6 +51,7 @@ DEBLUR_EPOCH_NB = 10
 DEBLUR_TEST_EPOCH_NB = 2
 DEBLUR_VALID_SIZE = 1000
 DEBLUR_TEST_VALID_SIZE = 30
+DEBLUR_KERNEL_SIZE = 7
 
 
 def load_dataset(filenames: list, batch_size: int, corruption_func: callable, crop_size: tuple):
