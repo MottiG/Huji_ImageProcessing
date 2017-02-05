@@ -161,7 +161,7 @@ def restore_image(corrupted_image: np.ndarray, base_model: Model, num_channels: 
     fix_im = corrupted_image - NORM_VAL
     fix_im = model.predict(fix_im[np.newaxis, np.newaxis, ...])[0][0]
     fix_im += NORM_VAL
-    return fix_im.clip(0, 1)
+    return fix_im.clip(0, 1).astype(np.float32)
 
 
 def add_gaussian_noise(image: np.ndarray, min_sigma: float, max_sigma: float) -> np.ndarray:
@@ -178,7 +178,7 @@ def add_gaussian_noise(image: np.ndarray, min_sigma: float, max_sigma: float) ->
     sigma = random.uniform(min_sigma, max_sigma)
     noise_im = np.random.normal(scale=sigma, size=image.shape)
     corrupted = image + noise_im
-    return corrupted.clip(0, 1)
+    return corrupted.clip(0, 1).astype(np.float32)
 
 
 def learn_denoising_model(quick_mode: bool=False) -> tuple:
@@ -210,7 +210,7 @@ def add_motion_blur(image: np.ndarray, kernel_size: int, angle: float) -> np.nda
     """
     kernel = sol5_utils.motion_blur_kernel(kernel_size, angle)
     blurred = filters.convolve(image, kernel, mode='mirror')
-    return blurred
+    return blurred.astype(np.float32)
 
 
 def random_motion_blur(image: np.ndarray, list_of_kernel_sizes: list) -> np.ndarray:
