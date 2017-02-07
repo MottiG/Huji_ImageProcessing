@@ -12,11 +12,11 @@ import sol5_utils
 # model.save_weights('denois_weights.h5')
 
 
-im1 = read_image(sol5_utils.images_for_deblurring()[13], 1)
-cim = random_motion_blur(im1, [DEBLUR_KERNEL_SIZE])
-mdl = build_nn_model(DEBLUR_PATCH_SIZE, DEBLUR_PATCH_SIZE, DEBLUR_CHANNELS)
-mdl.load_weights('blur_weights.h5')
-fix = restore_image(cim, mdl, DEBLUR_CHANNELS)
+im1 = read_image(sol5_utils.images_for_denoising()[20], 1)
+cim = add_gaussian_noise(im1, 0.0, 0.2)
+mdl = build_nn_model(DENOIS_PATCH_SIZE, DENOIS_PATCH_SIZE, DENOIS_CHANNELS)
+mdl.load_weights('denois_weights.h5')
+fix = restore_image(cim, mdl, DENOIS_CHANNELS)
 
 f = plt.figure()
 f.add_subplot(121)

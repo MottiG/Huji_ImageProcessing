@@ -1,0 +1,12 @@
+Corruption function:
+randomly choose a kernel size from a given range, and blur the given image
+with the chosen kernel - this will imitate the bluring we get when upscaling
+an image.
+In each iteration, we extract patches from the original image and the blured
+image, so the net will learn how to deblur a given image (not a motion blur)
+
+Restore_image:
+we add a wrapper function to the restore_image that gets an image and the required new resolution.
+the function performs upscaling to the new size (which will cause bluring to the new image)
+and send the new image to restore_image. the net already learn how to deal with the blured image
+and will deblur the image.
